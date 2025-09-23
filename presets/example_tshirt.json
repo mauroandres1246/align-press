@@ -1,0 +1,27 @@
+{
+  "name": "example_tshirt",
+  "roi": [
+    300,
+    150,
+    700,
+    500
+  ],
+  "target_center_px": [
+    650,
+    380
+  ],
+  "target_angle_deg": 0.0,
+  "target_size_px": [
+    180,
+    120
+  ],
+  "tolerance_mm": 3.0,
+  "tolerance_deg": 2.0,
+  "detection_mode": "contour",
+  "params": {
+    "threshold": "otsu",
+    "invert": false,
+    "morph_k": 3,
+    "min_area": 800
+  }
+}

@@ -1,0 +1,6 @@
+# For WSL/dev. On Raspberry Pi 3 you can either install via apt (python3-opencv)
+# or try pip install opencv-python==4.8.* (may fall back to apt due to wheels).
+numpy>=1.24
+opencv-python>=4.8
+# Optional (for ArUco); heavy for Raspberry Pi—prefer apt: python3-opencv
+opencv-contrib-python>=4.8

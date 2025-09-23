@@ -1,0 +1,9 @@
+{
+  "mode": "chessboard",
+  "image": "calibrations/chessboard_sample.jpg",
+  "pattern_size": [
+    7,
+    5
+  ],
+  "square_size_mm": 25.0
+}
