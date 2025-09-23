@@ -17,21 +17,37 @@ def chessboard_mm_per_px(image, pattern_size=(7,5), square_size_mm=25.0) -> Opti
     # Refina esquinas
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
     corners = cv2.cornerSubPix(gray, corners, (11,11), (-1,-1), criteria)
-    # Promedia distancias entre esquinas adyacentes en X
+    # Promedia distancias entre esquinas adyacentes en ambos ejes
     w = pattern_size[0]
     h = pattern_size[1]
-    dists = []
+    horizontal_dists = []
     for r in range(h):
         for c in range(w-1):
             i = r*w + c
             j = r*w + c + 1
             d = np.linalg.norm(corners[i,0] - corners[j,0])
-            dists.append(d)
+            horizontal_dists.append(d)
+    vertical_dists = []
+    for r in range(h-1):
+        for c in range(w):
+            i = r*w + c
+            j = (r+1)*w + c
+            d = np.linalg.norm(corners[i,0] - corners[j,0])
+            vertical_dists.append(d)
+    dists = horizontal_dists + vertical_dists
     if len(dists) == 0:
         return None
     mean_px_per_square = float(np.mean(dists))
     mm_per_px = square_size_mm / mean_px_per_square
-    return Calibration(mm_per_px=mm_per_px, method="chessboard", meta={"pattern_size":pattern_size, "square_size_mm":square_size_mm})
+    return Calibration(
+        mm_per_px=mm_per_px,
+        method="chessboard",
+        meta={
+            "pattern_size": pattern_size,
+            "square_size_mm": square_size_mm,
+            "samples": len(dists),
+        },
+    )
 
 def aruco_mm_per_px(image, marker_length_mm:float=50.0, dictionary_name:str="DICT_5X5_50") -> Optional[Calibration]:
     # ArUco requiere cv2.aruco (opencv-contrib). Si no existe, retornar None
