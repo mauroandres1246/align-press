@@ -16,6 +16,15 @@ def load_calibration(path: pathlib.Path) -> Calibration:
     else:
         # modo offline con imagen
         img_path = pathlib.Path(cfg["image"])
+        if img_path.is_absolute():
+            img_path = img_path.resolve()
+        else:
+            parts = list(img_path.parts)
+            if parts and parts[0] == path.parent.name:
+                parts = parts[1:]
+                img_path = pathlib.Path(*parts) if parts else pathlib.Path(".")
+            img_path = (path.parent / img_path).resolve()
+
         img = cv2.imread(str(img_path))
         if img is None:
             raise FileNotFoundError(f"No se pudo leer imagen de calibración: {img_path}")

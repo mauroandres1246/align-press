@@ -32,6 +32,13 @@ def detect_logo_contour(frame, roi, params) -> Optional[Pose2D]:
         return None
     rect = cv2.minAreaRect(cnt)  # ((cx,cy),(w,h),angle)
     (cx,cy),(rw,rh),angle = rect
+
+    if rw < rh:
+        angle += 90.0
+        rw, rh = rh, rw
+
+    angle = ((angle + 180.0) % 360.0) - 180.0
+
     # Ajuste: minAreaRect angle range and mapping
     pose = Pose2D(center=(x+cx, y+cy), angle_deg=float(angle), size=(rw, rh))
     return pose
