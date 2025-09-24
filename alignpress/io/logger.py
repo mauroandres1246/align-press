@@ -18,6 +18,9 @@ _CSV_FIELDS: List[str] = [
     "dx_mm",
     "dy_mm",
     "dtheta_deg",
+    "session_id",
+    "preset_name",
+    "dataset_path",
 ]
 
 

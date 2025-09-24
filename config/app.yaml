@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 language: es
 preset_path: ../presets/example_tshirt.json
 calibration_path: ../calibrations/chessboard_7x5_25mm.json
@@ -9,3 +9,10 @@ dataset:
 logging:
   output_dir: ../logs/headless_run
   formats: [csv, json]
+ui:
+  theme: light
+  operator_fullscreen: false
+  kiosk_mode: false
+  technical_pin: "2468"
+  onboarding_completed: false
+  camera_layout: single
