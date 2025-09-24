@@ -1,12 +1,15 @@
-from typing import Optional, Tuple
+from typing import Optional
+
 import cv2
 import numpy as np
+
 from alignpress.core.geometry import Pose2D
+
 
 def detect_logo_aruco(frame, roi, params) -> Optional[Pose2D]:
     if not hasattr(cv2, "aruco"):
         return None
-    x,y,w,h = roi
+    x, y, w, h = roi
     roi_img = frame[y:y+h, x:x+w]
     gray = cv2.cvtColor(roi_img, cv2.COLOR_BGR2GRAY)
     aruco = cv2.aruco
@@ -18,7 +21,20 @@ def detect_logo_aruco(frame, roi, params) -> Optional[Pose2D]:
     corners, ids, _ = aruco.detectMarkers(gray, dictionary)
     if ids is None or len(corners)==0:
         return None
-    pts = corners[0][0]
+    expected_id = params.get("expected_id")
+    ids = ids.flatten()
+    index = 0
+    if expected_id is not None:
+        try:
+            expected_id = int(expected_id)
+        except (TypeError, ValueError):
+            expected_id = None
+        if expected_id is not None:
+            matches = np.where(ids == expected_id)[0]
+            if len(matches) == 0:
+                return None
+            index = int(matches[0])
+    pts = corners[index][0]
     center = pts.mean(axis=0)
     # orientacion: usa PCA o vector entre dos esquinas
     v = pts[1] - pts[0]

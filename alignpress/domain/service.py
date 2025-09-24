@@ -44,7 +44,11 @@ def _calibration_from_config(config: AppConfig, platen: PlatenProfile) -> Calibr
                     "square_size_mm": platen.calibration.square_size_mm,
                 }
             )
+            if calibration.mm_per_px <= 0:
+                raise ValueError("mm_per_px must be positive in calibration")
             return calibration
+    if platen.calibration.mm_per_px <= 0:
+        raise ValueError("Platen calibration must have positive mm_per_px")
     return Calibration(
         mm_per_px=platen.calibration.mm_per_px,
         method="profile",

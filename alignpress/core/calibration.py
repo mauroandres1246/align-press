@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Dict, Any
 import json
 from pathlib import Path
 import cv2
@@ -25,6 +25,8 @@ class Calibration:
     def from_dict(cls, data: Dict[str, Any]) -> "Calibration":
         schema_version = int(data.get("schema_version", 1))
         mm_per_px = float(data["mm_per_px"])
+        if mm_per_px <= 0:
+            raise ValueError("mm_per_px must be positive")
         method = data.get("method", "unknown")
         meta = data.get("meta", {}) or {}
         return cls(mm_per_px=mm_per_px, method=method, meta=meta, schema_version=schema_version)
@@ -58,7 +60,11 @@ def chessboard_mm_per_px(image, pattern_size=(7,5), square_size_mm=25.0) -> Opti
     if len(dists) == 0:
         return None
     mean_px_per_square = float(np.mean(dists))
+    if mean_px_per_square <= 0:
+        return None
     mm_per_px = square_size_mm / mean_px_per_square
+    if mm_per_px <= 0:
+        return None
     return Calibration(
         mm_per_px=mm_per_px,
         method="chessboard",
@@ -87,7 +93,11 @@ def aruco_mm_per_px(image, marker_length_mm:float=50.0, dictionary_name:str="DIC
     # largo promedio de lados en pixeles
     side_lengths = [np.linalg.norm(pts[i]-pts[(i+1)%4]) for i in range(4)]
     mean_side_px = float(np.mean(side_lengths))
+    if mean_side_px <= 0:
+        return None
     mm_per_px = marker_length_mm / mean_side_px
+    if mm_per_px <= 0:
+        return None
     return Calibration(
         mm_per_px=mm_per_px,
         method="aruco",

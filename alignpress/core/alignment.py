@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import logging
 from typing import Callable, Dict, Optional, Tuple
 
 import numpy as np
@@ -66,6 +67,7 @@ class LogoAligner:
         self.preset = preset
         self.calibration = calibration
         self.detectors = detectors or _DETECTORS
+        self._logger = logging.getLogger(__name__)
         self._target_pose = Pose2D(
             center=self.preset.target_center_px,
             angle_deg=self.preset.target_angle_deg,
@@ -86,13 +88,17 @@ class LogoAligner:
 
     def _detect(self, frame: np.ndarray) -> Tuple[Optional[Pose2D], Optional[str]]:
         order = self._detection_order()
-        roi = self.preset.roi
+        roi = self._clamp_roi(frame, self.preset.roi)
         for mode in order:
             detector = self.detectors.get(mode)
             if detector is None:
                 continue
             params = self._detector_params(mode)
-            pose = detector(frame, roi, params)
+            try:
+                pose = detector(frame, roi, params)
+            except Exception as exc:  # pragma: no cover - defensive logging
+                self._logger.exception("Detector '%s' failed: %s", mode, exc)
+                continue
             if pose is not None:
                 return pose, mode
         return None, None
@@ -109,3 +115,20 @@ class LogoAligner:
         order = [primary]
         order.extend(mode for mode in known if mode != primary)
         return tuple(order)
+
+    def _clamp_roi(self, frame: np.ndarray, roi: Tuple[int, int, int, int]) -> Tuple[int, int, int, int]:
+        height, width = frame.shape[:2]
+        x, y, w, h = roi
+        x = max(0, x)
+        y = max(0, y)
+        if w <= 0 or h <= 0:
+            return (0, 0, width, height)
+        max_w = max(1, width - x)
+        max_h = max(1, height - y)
+        w = max(1, min(w, max_w))
+        h = max(1, min(h, max_h))
+        if x + w > width:
+            x = max(0, width - w)
+        if y + h > height:
+            y = max(0, height - h)
+        return (x, y, w, h)

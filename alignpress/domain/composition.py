@@ -58,9 +58,13 @@ def compose_logo_presets(
     calibration: Calibration,
 ) -> List[LogoTaskDefinition]:
     mm_per_px = calibration.mm_per_px
+    if mm_per_px <= 0:
+        raise ValueError("Calibration mm_per_px must be positive")
     overrides: Dict[str, LogoOverride] = {}
     variant_scale = 1.0
     if variant:
+        if variant.style_name and variant.style_name != style.name:
+            raise ValueError(f"Variant '{variant.name}' no corresponde al estilo '{style.name}'")
         variant_scale = variant.scale
         overrides = {item.logo_id: item for item in variant.logos}
 
@@ -69,12 +73,21 @@ def compose_logo_presets(
         override = overrides.get(logo.logo_id)
         applied = _apply_override(logo, override, variant_scale)
         center_px = _mm_to_px(applied["center_mm"], mm_per_px)
-        size_px = _mm_to_px(applied["size_mm"], mm_per_px)
-        roi_px = _mm_to_px(applied["roi_mm"], mm_per_px)
-        roi_x = int(round(center_px[0] - roi_px[0] / 2.0))
-        roi_y = int(round(center_px[1] - roi_px[1] / 2.0))
-        roi_w = max(10, int(round(roi_px[0])))
-        roi_h = max(10, int(round(roi_px[1])))
+        size_mm = applied["size_mm"]
+        roi_mm = applied["roi_mm"]
+        size_px = (
+            max(1, int(round(size_mm[0] / mm_per_px))),
+            max(1, int(round(size_mm[1] / mm_per_px))),
+        )
+        roi_width_px = max(10, int(round(roi_mm[0] / mm_per_px)))
+        roi_height_px = max(10, int(round(roi_mm[1] / mm_per_px)))
+        roi_x = int(round(center_px[0] - roi_width_px / 2.0))
+        roi_y = int(round(center_px[1] - roi_height_px / 2.0))
+        roi_w = roi_width_px
+        roi_h = roi_height_px
+        params = logo.params if isinstance(logo.params, dict) else {}
+        if logo.aruco_id is not None:
+            params = _with_expected_id(params, int(logo.aruco_id))
         preset = Preset(
             name=f"{style.name}:{logo.logo_id}",
             roi=(roi_x, roi_y, roi_w, roi_h),
@@ -84,7 +97,7 @@ def compose_logo_presets(
             tolerance_mm=applied["tolerance_mm"],
             tolerance_deg=applied["tolerance_deg"],
             detection_mode=logo.detector,
-            params=logo.params,
+            params=params,
         )
         tasks.append(
             LogoTaskDefinition(
@@ -95,3 +108,16 @@ def compose_logo_presets(
             )
         )
     return tasks
+
+
+def _with_expected_id(params: Dict[str, object], expected_id: int) -> Dict[str, object]:
+    if not isinstance(params, dict):
+        return {"expected_id": expected_id}
+    params_copy = dict(params)
+    if "aruco" in params_copy and isinstance(params_copy["aruco"], dict):
+        aruco_params = dict(params_copy["aruco"])
+        aruco_params["expected_id"] = expected_id
+        params_copy["aruco"] = aruco_params
+    else:
+        params_copy["expected_id"] = expected_id
+    return params_copy
