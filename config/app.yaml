@@ -1,18 +1,20 @@
 schema_version: 2
 language: es
-preset_path: ../presets/example_tshirt.json
-calibration_path: ../calibrations/chessboard_7x5_25mm.json
+preset_path: /home/mauro/code/alignpress_pro_phase1/presets/example_tshirt.json
+calibration_path: /home/mauro/code/alignpress_pro_phase1/calibrations/chessboard_7x5_25mm.json
 dataset:
-  path: ../datasets/sample_images
+  path: /home/mauro/code/alignpress_pro_phase1/datasets/sample_images
   fps: 30.0
   loop: false
 logging:
-  output_dir: ../logs/headless_run
-  formats: [csv, json]
+  output_dir: /home/mauro/code/alignpress_pro_phase1/logs/headless_run
+  formats:
+  - csv
+  - json
 ui:
   theme: light
   operator_fullscreen: false
   kiosk_mode: false
-  technical_pin: "2468"
-  onboarding_completed: false
+  technical_pin: '2468'
+  onboarding_completed: true
   camera_layout: single

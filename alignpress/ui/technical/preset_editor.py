@@ -78,7 +78,10 @@ class DraggableCenterItem(QObject, QGraphicsEllipseItem):
 class PresetGraphicsView(QGraphicsView):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setRenderHints(self.renderHints() | Qt.Antialiasing | Qt.SmoothPixmapTransform)
+        from PySide6.QtGui import QPainter
+
+        hints = self.renderHints() | QPainter.Antialiasing | QPainter.SmoothPixmapTransform
+        self.setRenderHints(hints)
         self.setScene(QGraphicsScene(self))
         self._background = self.scene().addPixmap(QPixmap())
         self._roi_item = DraggableRectItem(QRectF(0, 0, 100, 100))

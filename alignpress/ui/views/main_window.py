@@ -4,14 +4,13 @@ from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QEvent, Qt, Slot
-from PySide6.QtGui import QAction, QCloseEvent, QKeySequence
+from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QFileDialog,
     QInputDialog,
     QLineEdit,
     QMainWindow,
     QMessageBox,
-    QShortcut,
     QStackedWidget,
     QWidget,
 )
