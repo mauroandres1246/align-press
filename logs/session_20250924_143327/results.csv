@@ -1,0 +1,1 @@
+frame_id,timestamp,status,within_tolerance,detection_method,cx_px,cy_px,angle_deg,width_px,height_px,dx_mm,dy_mm,dtheta_deg,session_id,preset_name,dataset_path

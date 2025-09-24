@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from alignpress.domain.service import build_logo_tasks
 from alignpress.ui.app_context import AppContext
 from alignpress.ui.controllers.simulator import SimulatorController
 from alignpress.ui.i18n import I18nManager
@@ -47,9 +48,10 @@ class MainWindow(QMainWindow):
 
         self._operator_page.messageEmitted.connect(self._show_status_message)
         self._operator_page.errorEmitted.connect(self._show_error_message)
+        self._operator_page.selectionApplied.connect(self._initialize_job_from_config)
         self._technical_page.messageEmitted.connect(self._show_status_message)
         self._technical_page.errorEmitted.connect(self._show_error_message)
-        self._technical_page.presetSaved.connect(lambda *_: self._controller.load_session())
+        self._technical_page.dataChanged.connect(self._initialize_job_from_config)
         self._controller.errorOccurred.connect(self._show_error_message)
         self._controller.statusMessage.connect(self._show_status_message)
         self._controller.playbackStateChanged.connect(self._handle_playback_state)
@@ -64,7 +66,7 @@ class MainWindow(QMainWindow):
 
         self._state_store.subscribe(self._on_state_changed)
         self._apply_window_prefs()
-        self._operator_page.initialize()
+        self._initialize_job_from_config()
         self._activate_operator_mode()
         if not self._context.config.ui.onboarding_completed:
             self._show_onboarding()
@@ -342,3 +344,20 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, self._i18n("messages.onboarding.title"), steps)
         self._context.config.ui.onboarding_completed = True
         self._context.save_config()
+
+    def _initialize_job_from_config(self) -> None:
+        try:
+            platen, style, variant, calibration, logo_tasks = build_logo_tasks(self._context.config)
+        except Exception as exc:  # pragma: no cover - filesystem dependent
+            self._controller.errorOccurred.emit(str(exc))
+            platen = None
+            style = None
+            variant = None
+            calibration = None
+            logo_tasks = []
+
+        dataset_path = self._context.config.dataset.path
+        self._operator_page.initialize_assets(platen, style, variant, dataset_path)
+        if logo_tasks and calibration is not None:
+            self._controller.configure_job(platen, style, variant, calibration, logo_tasks)
+        self._controller.load_session()

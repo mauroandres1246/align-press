@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "name": "Estilo Camiseta",
+  "version": "1.0",
+  "logos": [
+    {
+      "logo_id": "pecho",
+      "display_name": "Logo Pecho",
+      "detector": "contour",
+      "params": {
+        "threshold": "otsu",
+        "morph_k": 3,
+        "min_area": 600
+      },
+      "target_center_mm": [
+        200.0,
+        150.0
+      ],
+      "target_size_mm": [
+        90.0,
+        60.0
+      ],
+      "roi_size_mm": [
+        200.0,
+        200.0
+      ],
+      "target_angle_deg": 0.0,
+      "tolerance_mm": 3.0,
+      "tolerance_deg": 2.0,
+      "instructions": "Alinear con el centro del cuello"
+    },
+    {
+      "logo_id": "manga",
+      "display_name": "Logo Manga",
+      "detector": "contour",
+      "params": {
+        "threshold": "fixed",
+        "thr_value": 120,
+        "invert": false
+      },
+      "target_center_mm": [
+        320.0,
+        120.0
+      ],
+      "target_size_mm": [
+        70.0,
+        40.0
+      ],
+      "roi_size_mm": [
+        160.0,
+        160.0
+      ],
+      "target_angle_deg": 0.0,
+      "tolerance_mm": 3.0,
+      "tolerance_deg": 2.0,
+      "instructions": "Alinear con costura de manga"
+    }
+  ],
+  "notes": "Diseño base de camiseta"
+}

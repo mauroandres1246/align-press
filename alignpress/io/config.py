@@ -29,6 +29,21 @@ class UIConfig:
 
 
 @dataclass
+class AssetsConfig:
+    platens_dir: Path
+    styles_dir: Path
+    variants_dir: Path
+    job_cards_dir: Path
+
+
+@dataclass
+class SelectionConfig:
+    platen_path: Path
+    style_path: Path
+    variant_path: Path | None
+
+
+@dataclass
 class AppConfig:
     schema_version: int
     language: str
@@ -37,6 +52,10 @@ class AppConfig:
     calibration_path: Path
     logging: LoggingConfig
     ui: UIConfig = field(default_factory=UIConfig)
+    assets: AssetsConfig | None = None
+    selection: SelectionConfig | None = None
+    calibration_reminder_days: int = 7
+    calibration_expire_days: int = 30
 
 
 def _resolve_path(base: Path, value: str) -> Path:
@@ -67,8 +86,8 @@ def load_app_config(path: Path) -> AppConfig:
     dataset_loop = bool(dataset_raw.get("loop", False))
     dataset_cfg = DatasetConfig(path=dataset_path, fps=dataset_fps, loop=dataset_loop)
 
-    preset_path = _resolve_path(path.parent, raw["preset_path"])
-    calibration_path = _resolve_path(path.parent, raw["calibration_path"])
+    preset_path = _resolve_path(path.parent, raw.get("preset_path", "presets/example_tshirt.json"))
+    calibration_path = _resolve_path(path.parent, raw.get("calibration_path", "calibrations/chessboard_7x5_25mm.json"))
 
     logging_raw = raw.get("logging", {})
     formats = logging_raw.get("formats", ["csv"])
@@ -87,6 +106,32 @@ def load_app_config(path: Path) -> AppConfig:
         camera_layout=ui_raw.get("camera_layout", "single"),
     )
 
+    assets_raw = raw.get("assets", {})
+    assets_cfg = AssetsConfig(
+        platens_dir=_resolve_path(path.parent, assets_raw.get("platens_dir", "platens")),
+        styles_dir=_resolve_path(path.parent, assets_raw.get("styles_dir", "styles")),
+        variants_dir=_resolve_path(path.parent, assets_raw.get("variants_dir", "variants")),
+        job_cards_dir=_resolve_path(path.parent, assets_raw.get("job_cards_dir", "logs/job_cards")),
+    )
+    for directory in [
+        assets_cfg.platens_dir,
+        assets_cfg.styles_dir,
+        assets_cfg.variants_dir,
+        assets_cfg.job_cards_dir,
+    ]:
+        directory.mkdir(parents=True, exist_ok=True)
+
+    selection_raw = raw.get("selection", {})
+    variant_raw = selection_raw.get("variant_path")
+    selection_cfg = SelectionConfig(
+        platen_path=_resolve_path(path.parent, selection_raw.get("platen_path", "platens/default_platen.json")),
+        style_path=_resolve_path(path.parent, selection_raw.get("style_path", "styles/example_style.json")),
+        variant_path=_resolve_path(path.parent, variant_raw) if variant_raw else None,
+    )
+
+    reminder_days = int(raw.get("calibration_reminder_days", 7))
+    expire_days = int(raw.get("calibration_expire_days", 30))
+
     return AppConfig(
         schema_version=schema_version,
         language=language,
@@ -95,6 +140,10 @@ def load_app_config(path: Path) -> AppConfig:
         calibration_path=calibration_path,
         logging=logging_cfg,
         ui=ui_cfg,
+        assets=assets_cfg,
+        selection=selection_cfg,
+        calibration_reminder_days=reminder_days,
+        calibration_expire_days=expire_days,
     )
 
 
@@ -122,6 +171,19 @@ def save_app_config(config: AppConfig, path: Path) -> None:
             "onboarding_completed": config.ui.onboarding_completed,
             "camera_layout": config.ui.camera_layout,
         },
+        "assets": {
+            "platens_dir": _make_relative(base, config.assets.platens_dir) if config.assets else "platens",
+            "styles_dir": _make_relative(base, config.assets.styles_dir) if config.assets else "styles",
+            "variants_dir": _make_relative(base, config.assets.variants_dir) if config.assets else "variants",
+            "job_cards_dir": _make_relative(base, config.assets.job_cards_dir) if config.assets else "logs/job_cards",
+        },
+        "selection": {
+            "platen_path": _make_relative(base, config.selection.platen_path) if config.selection else "platens/default_platen.json",
+            "style_path": _make_relative(base, config.selection.style_path) if config.selection else "styles/example_style.json",
+            "variant_path": _make_relative(base, config.selection.variant_path) if config.selection and config.selection.variant_path else None,
+        },
+        "calibration_reminder_days": config.calibration_reminder_days,
+        "calibration_expire_days": config.calibration_expire_days,
     }
     with path.open("w") as fh:
         yaml.safe_dump(data, fh, sort_keys=False)

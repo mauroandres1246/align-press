@@ -1,110 +1,123 @@
-# AlignPress Pro — Sprint 2 (UI Operador/Técnico)
+# AlignPress Pro — Sprint 2.1 (Planchas + Estilos + Tallas)
 
-Segunda iteración del proyecto AlignPress Pro. Sobre la base del núcleo headless del Sprint 1 ahora contamos con una aplicación de escritorio en PySide6 lista para operadores y técnicos, con simulador integrado, edición de presets y administración básica de hardware (mock).
+La segunda entrega incorpora la arquitectura completa de planchas, estilos y tallas, además de una UX guiada para operador y técnico. El núcleo de detección del Sprint 1 se reutiliza; ahora se generan presets dinámicamente combinando plancha calibrada + estilo (lista de logos) + variante por talla.
 
-## Arquitectura resumida
-- `alignpress/core/*`: núcleo de detección/calibración/geom entrado en `LogoAligner` (usa detectores OpenCV, presets JSON y calibraciones versionadas).
-- `alignpress/io/config.py`: carga/guardado de `config/app.yaml` con secciones `dataset`, `logging`, `ui` (tema, kiosco, PIN, layout cámaras).
-- `alignpress/io/logger.py`: logger CSV/JSON por sesión (`session_<timestamp>`).
-- `alignpress/ui/application.py`: creación de `QApplication`, administración de tema e internacionalización (`alignpress/ui/i18n.py`).
-- `alignpress/ui/controllers/simulator.py`: controlador MVVM del simulador (playback, logging, exportación, historial en memoria).
-- `alignpress/ui/views/operator_page.py`: vista Operador (tabs Cámara A/B, overlay, métricas, tabla de historial, snapshots, atajos y controles grandes).
-- `alignpress/ui/views/technical_page.py`: vista Técnico (lista de presets, `PresetEditorWidget`, panel de calibración, mock Arduino, cámara dual ready, gestión de PIN/config).
-- `alignpress/ui/technical/*`: widgets específicos (editor gráfico de ROI/target, panel de calibración, hardware mock).
-- `scripts/run_ui.py`: punto de entrada único para la aplicación PySide6.
-- Headless y utilidades siguen disponibles (`scripts/process_dataset.py`, `scripts/calibrate_from_image.py`).
+## Arquitectura
 
-## Instalación
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt  # incluye PySide6, OpenCV y utilidades
-```
-En Raspberry Pi puedes seguir usando los paquetes `python3-opencv` / `python3-numpy` del sistema y ejecutar la UI desde escritorio.
+### Dominio (`alignpress/domain`)
+- **PlatenProfile** (`platen.py`): nombre, tamaño en mm, calibración (mm/px, patrón, última verificación).
+- **StyleDefinition** (`style.py`): estilo/diseño con lista de logos, parámetros detector y geometría en mm.
+- **SizeVariant** (`variant.py`): offsets/escala por talla respecto al estilo base.
+- **Composition** (`composition.py`): combina plancha + estilo + talla → presets `LogoTaskDefinition` listos para el `LogoAligner`.
+- **JobCard** (`job.py`): tarjeta de trabajo por prenda procesada (timestamp, plancha, estilo, talla, métricas por logo, snapshot opcional).
 
-## Configuración (`config/app.yaml`)
+### Configuración (`config/app.yaml`)
 ```yaml
-schema_version: 2
+schema_version: 3
 language: es
-preset_path: ../presets/example_tshirt.json
-calibration_path: ../calibrations/chessboard_7x5_25mm.json
 dataset:
-  path: ../datasets/sample_images
+  path: datasets/sample_images
   fps: 30.0
   loop: false
 logging:
-  output_dir: ../logs
+  output_dir: logs
   formats: [csv, json]
 ui:
   theme: light
-  operator_fullscreen: false
-  kiosk_mode: false
-  technical_pin: "2468"
-  onboarding_completed: false
-  camera_layout: single
+  technical_pin: '2468'
+assets:
+  platens_dir: platens
+  styles_dir: styles
+  variants_dir: variants
+  job_cards_dir: logs/job_cards
+selection:
+  platen_path: platens/default_platen.json
+  style_path: styles/example_style.json
+  variant_path: variants/example_variant.json
+calibration_reminder_days: 7
+calibration_expire_days: 30
 ```
-- Las rutas se resuelven relativamente al propio `config/app.yaml`.
-- Al cargar dataset/preset/calibración desde la UI se actualiza y persiste este archivo.
+- `assets` define directorios donde se guardan los JSON versionados.
+- `selection` marca la combinación activa (se actualiza desde el wizard de operador).
+- `calibration_reminder_days` / `calibration_expire_days` controlan el chip de calibración.
 
-## Lanzar la aplicación
+### Archivos de ejemplo
+- `platens/default_platen.json`: plancha 40x50 mm/px calibrada.
+- `styles/example_style.json`: estilo con logos “Pecho” y “Manga”, posiciones en mm y parámetros de detector.
+- `variants/example_variant.json`: talla L con offsets y escala.
+
+## UI Operador
+1. **Wizard de selección**: Paso a paso plancha → estilo → talla. La selección se guarda y se recalculan presets.
+2. **Header**: muestra Plancha, Estilo, Talla y Versión activos. Chip de calibración 🟢/🟠/🔴 según antigüedad.
+3. **Checklist**: lista de logos pendiente/OK/Ajustar, con navegación manual o auto avance al obtener “OK”.
+4. **Viewport**: overlay fantasma del logo, detección actual, flechas, métricas (`dx/dy/θ`). Tooltips de corrección (“Mover 2.1 mm ↓”, “Rotar 1.2° ↻”).
+5. **Historial**: tabla con estado por frame/logos. Exportable a CSV/JSON (`Archivo → Exportar resultados`).
+6. **Snapshots**: botón y atajo `S` guardan imagen con overlay.
+7. **Finalización**: al completar todos los logos se genera un Job Card en `logs/job_cards/job_*.json` con métricas, estados y dataset usado.
+
+Atajos: `Espacio` (Play/Pause), `F11` (Pantalla completa), `S` (Snapshot). El dataset se procesa en modo simulación; cada sesión genera resultados en `logs/session_*/`.
+
+## UI Técnico
+La vista técnica ahora tiene tres editores en pestañas:
+
+1. **Planchas**
+   - Lista de perfiles (`platens/*.json`).
+   - Campos para tamaño (mm), mm/px, patrón, fecha de verificación.
+   - Botón “Calibrar…” abre el panel de calibración (`CalibrationPanel`) para calcular mm/px desde un chessboard.
+   - Importar/exportar/duplicar/eliminar con guardado directo a JSON.
+
+2. **Estilos**
+   - Lista de estilos (`styles/*.json`).
+   - Edición de logos: posición objetivo (mm), ROI, detector (contour/ArUco), tolerancias, instrucciones para operador y parámetros JSON del detector.
+   - Añadir/duplicar/eliminar logos desde la UI, todo persistente en JSON.
+
+3. **Tallas**
+   - Lista de variantes (`variants/*.json`).
+   - Asociación con estilo base, factor de escala y overrides por logo (offsets en mm, escala relativa, tolerancias específicas).
+   - Importar/exportar, duplicar y guardar.
+
+Al guardar plancha/estilo/talla se emite `dataChanged` → la combinación activa se recalcula automáticamente para el operador.
+
+## Flujo Operador
+1. Abrir wizard (botón “Cambiar preset”).
+2. Seleccionar plancha/estilo/talla y confirmar.
+3. Revisar cada logo hasta obtener checklist ✅.
+4. Exportar resultados o guardar snapshot según necesidad.
+5. Revisar “job card” generado en `logs/job_cards/` para trazabilidad.
+
+## Flujo Técnico
+1. Configurar planchas: definir dimensiones y recalibrar cuando corresponde.
+2. Crear/editar estilos agregando logos en mm (coordenadas absolutas sobre la plancha calibrada).
+3. Crear variantes por talla, ajustando offsets y escala.
+4. Notificar al operador tras guardar (la app recarga la combinación automáticamente).
+
+## Logging & Evidencias
+- `logs/session_*`: CSV/JSON por sesión (frame, logo, dx/dy/θ, método, estado). Snapshots opcionales en `logs/session_*/snapshots/`.
+- `logs/job_cards/job_*.json`: tarjeta de trabajo por prenda con lista de logos, métricas y estado final.
+
+## Ejecución
 ```bash
-python scripts/run_ui.py --config config/app.yaml
+source .venv/bin/activate
+export DISPLAY=$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}'):0.0
+export LIBGL_ALWAYS_INDIRECT=1
+python -m scripts.run_ui --config config/app.yaml
 ```
-La primera ejecución muestra un onboarding breve (3 pasos). Desde la barra de menú puedes alternar tema claro/oscuro, pantalla completa (`F11`) y cambiar dataset/preset/calibración.
+*(En Windows nativo o Linux con escritorio no necesitas las variables DISPLAY).* 
 
-## Modo Operador
-- **Viewport**: Pestañas Cámara A/B (estructura lista para 2 cámaras). Cámara A muestra imagen con ROI, rectángulo fantasma y resultado detectado.
-- **Estado grande**: panel lateral con emoji/colores (`🟢 OK`, `🟠 Ajustar`, `🔴 No detectado`).
-- **Métricas**: `dx`, `dy`, `θ` con tolerancias configuradas en el preset. Flechas indican desplazamiento respecto al objetivo.
-- **Controles**: botones grandes `⏮`, `Iniciar/Pausar`, `⏭`, combo de velocidad (0.25x…2x), `Capturar`, `Cambiar preset`, `Detener`.
-- **Atajos**: `Espacio` (Play/Pause), `S` (snapshot con overlay), `F11` (pantalla completa). 
-- **Historial**: tabla inferior con frame, estado, métricas y timestamp. Cada frame procesado se registra y queda disponible para exportar.
-- **Exportación**: `Archivo → Exportar resultados` genera CSV/JSON con la corrida actual (valores + nombre de preset + dataset).
-- **Snapshots**: se guardan con overlay; se sugiere destino por defecto en `logs/session_*/snapshots/`.
-
-### Logging automático
-Cada vez que se carga un dataset se crea `logs/session_<timestamp>/` con `results.csv` y `results.jsonl`. Las filas incluyen `frame_id`, `timestamp`, `status`, `dx/dy/θ`, método de detección, nombre del preset y dataset.
-
-## Modo Técnico
-Acceso protegido: `Vista → Modo Técnico` solicita PIN (configurable en `config.ui.technical_pin`).
-
-- **Gestión de presets**: lista lateral (JSON dentro de `presets/`). Botones para crear, duplicar, renombrar, eliminar, importar y exportar.
-- **PresetEditorWidget**: vista previa editable con ROI arrastrable, centro objetivo movible, sliders numéricos para tamaño/ángulo/tolerancias y parámetros de detector (contornos/ArUco). Cambios marcan el preset como “pendiente de guardar”.
-- **Calibración**: panel para cargar imagen (chessboard o ArUco), detectar esquinas/marcadores, calcular mm/px y guardar JSON (actualiza `config.calibration_path`).
-- **Hardware mock**: botones `OK`, `Ajustar`, `Beep` registran eventos a modo de stub para integración con Arduino.
-- **Configuración UI**: selector de layout (Single/Dual camera) y actualización del PIN técnico.
-- **Reglas visibles**: se listan los estados globales (INIT, IDLE, RUN_SIM, ERROR) para operadores técnicos.
-
-Guardar un preset actualiza automáticamente el pipeline del operador (`LogoAligner` recarga preset/calibración/dataset).
-
-## Simulador headless
-Sigue disponible para pruebas en terminal:
+Modo headless para validar el core:
 ```bash
 python scripts/process_dataset.py --config config/app.yaml
 ```
-Genera los mismos CSV/JSON por lote en la carpeta configurada.
 
-## Pruebas y calidad
+## Pruebas y validación
 ```bash
-.venv/bin/python -m pytest            # geometry/calibration/detection
+.venv/bin/python -m pytest
 .venv/bin/python -m compileall alignpress scripts
 ```
-Las pruebas que dependen de ArUco se omiten si `cv2.aruco` no está disponible.
+Las pruebas cubren geometría, calibración y detección. El pipeline de composición se valida al ejecutar la app generando presets y job cards.
 
-## Manual rápido para operador
-1. Selecciona dataset/preset/calibración desde el menú (gear icon/Archivo).
-2. Verifica el panel lateral: verde = correcto; naranja = ajustar; rojo = no detectado.
-3. Usa `Iniciar`/`Espacio` para reproducir el lote; ajusta la velocidad con el combo.
-4. Consulta la tabla inferior para ver cada captura (doble clic resalta la fila).
-5. Exporta resultados o toma snapshots cuando necesites evidencia.
-
-## Manual rápido para técnico
-1. Ingresa al modo técnico (`Vista → Modo Técnico`, PIN por defecto `2468`).
-2. Selecciona un preset y edítalo (ROI, objetivo, tolerancias, detector).
-3. Guarda cambios para que el operador los reciba inmediatamente.
-4. Usa el panel de calibración para generar nuevos perfiles mm/px desde fotos.
-5. Mantén actualizado el PIN y el layout de cámaras según la instalación real.
-
----
-Para dudas sobre la arquitectura o nuevos sprints, revisa los módulos descritos arriba: el layout está preparado para escalar a doble cámara y comunicación serial en sprints siguientes.
+## Notas
+- Todos los JSON poseen `schema_version` para evolucionar el dominio.
+- Las rutas en `config/app.yaml` se guardan en relativo; los editores crean directorios automáticamente si no existen.
+- El chip de calibración cambia a 🟠 o 🔴 cuando `last_verified` supera los días configurados (7 y 30 por defecto).
+- Los parámetros de detector se editan como JSON libre; el operador verá las instrucciones asociadas a cada logo.
