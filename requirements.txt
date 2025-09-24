@@ -4,3 +4,5 @@ numpy>=1.24
 opencv-python>=4.8
 # Optional (for ArUco); heavy for Raspberry Pi—prefer apt: python3-opencv
 opencv-contrib-python>=4.8
+pyyaml>=6.0
+pytest>=7.4

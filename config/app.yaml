@@ -1,0 +1,11 @@
+schema_version: 1
+language: es
+preset_path: ../presets/example_tshirt.json
+calibration_path: ../calibrations/chessboard_7x5_25mm.json
+dataset:
+  path: ../datasets/sample_images
+  fps: 30.0
+  loop: false
+logging:
+  output_dir: ../logs/headless_run
+  formats: [csv, json]

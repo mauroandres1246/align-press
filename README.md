@@ -1,57 +1,97 @@
-# AlignPress Pro — Fase 1 (Prototipo 1 cámara, Raspberry Pi 3)
+# AlignPress Pro — Sprint 1 (Core + Simulador)
 
-Sistema de alineación asistida para planchas de doble paleta. Este prototipo usa **1 cámara** y verifica la colocación del **logo** en prenda con visión computarizada.
+Primer sprint del programa de alineación asistida AlignPress Pro. El foco es dejar un núcleo headless robusto, calibraciones reproducibles y una fuente simulada que permita validar la lógica en escritorio antes de construir la UI y el stack hardware.
 
-## Módulos incluidos
-- `alignpress/core/camera.py`: captura de video (OpenCV VideoCapture).
-- `alignpress/core/calibration.py`: calibración px→mm usando **chessboard A4** o **ArUco** (opcional).
-- `alignpress/detection/contour_detector.py`: detección simple por umbral + contornos.
-- `alignpress/detection/aruco_detector.py`: detección por marcador ArUco (si `cv2.aruco` disponible).
-- `alignpress/core/geometry.py`: cálculo de dx, dy y rotación θ vs preset.
-- `alignpress/core/presets.py`: carga/validación de presets JSON.
-- `alignpress/gui/overlay.py`: overlay con rectángulo fantasma, flechas y estados.
-- `scripts/main.py`: loop principal de demo.
+## Arquitectura Sprint 1
+- `alignpress/core/geometry.py`: utilidades geométricas (`Pose2D`, diffs, evaluación de tolerancias).
+- `alignpress/core/calibration.py`: cálculo mm/px vía chessboard o ArUco + serialización (`schema_version`).
+- `alignpress/core/presets.py`: presets con ROI/objetivo, tolerancias y parámetros por detector.
+- `alignpress/core/alignment.py`: flujo principal (`LogoAligner`) que combina detección + evaluación.
+- `alignpress/detection/*`: detectores por contorno y ArUco (reutilizados por el core headless y la demo interactiva).
+- `alignpress/io/config.py`: carga de `config/app.yaml` (dataset, idioma, paths de preset/calibración, logging).
+- `alignpress/io/simulated_source.py`: lectura de carpetas de imágenes o videos como frames con timestamp.
+- `alignpress/io/logger.py`: logging de resultados a CSV y JSONL.
+- `alignpress/app/headless.py`: orquestador del pipeline headless.
+- `scripts/process_dataset.py`: CLI para procesar datasets simulados.
+- `scripts/calibrate_from_image.py`: genera calibraciones mm/px desde una imagen estática.
+- `scripts/main.py`: demo visual (manteniendo la UI básica del prototipo anterior).
 
-## Instalación rápida (WSL/Linux dev)
+## Instalación
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
-# Si falla opencv-contrib en WSL, puedes omitirlo: pip install opencv-python
 ```
+- En Raspberry Pi puedes usar `sudo apt install python3-opencv python3-numpy` y ejecutar con el intérprete del sistema.
+- Para usar ArUco en escritorio instala `opencv-contrib-python` (ya incluido en `requirements.txt`).
 
-## Instalación en Raspberry Pi 3 (Raspberry Pi OS Bookworm)
-**Sugerido (más liviano y estable en Pi):**
+## Calibración (mm por pixel)
+Genera un archivo `calibration.json` compatible con `schema_version`:
 ```bash
-sudo apt update
-sudo apt install -y python3-opencv python3-numpy
-# Verifica:
-python3 -c "import cv2, numpy as np; print('OpenCV', cv2.__version__)"
+python scripts/calibrate_from_image.py \
+  --image calibrations/chessboard_sample.jpg \
+  --mode chessboard \
+  --pattern-size 7 5 \
+  --square-mm 25.0 \
+  --output calibrations/chessboard_7x5_25mm.json
 ```
+- Para ArUco usa `--mode aruco --marker-mm 50 --dictionary DICT_5X5_50`.
+- El script añade `source_image` a `meta` y guarda `mm_per_px`, listo para reutilizar.
 
-**Opcional (si quieres pip):**
+## Presets y configuración
+- Presets (`presets/*.json`) incluyen `schema_version`, ROI, tolerancias y parámetros por detector (`contour`, `aruco`).
+- Configuración de la app (`config/app.yaml`):
+  ```yaml
+  schema_version: 1
+  language: es
+  preset_path: presets/example_tshirt.json
+  calibration_path: calibrations/chessboard_7x5_25mm.json
+  dataset:
+    path: datasets/sample_images
+    fps: 30.0
+    loop: false
+  logging:
+    output_dir: logs/headless_run
+    formats: [csv, json]
+  ```
+- Coloca imágenes o videos de prueba en `datasets/sample_images/`.
+
+## Ejecución headless (simulador)
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install numpy==1.24.*  # versiones más viejas pueden ser necesarias según arch
-pip install opencv-python==4.8.*
-# Para ArUco en Pi, lo más estable suele ser apt (python3-opencv ya lo trae en muchos builds)
+python scripts/process_dataset.py --config config/app.yaml
+# Limita cantidad de frames (debug)
+python scripts/process_dataset.py --config config/app.yaml --max-frames 10
 ```
+- Produce `logs/headless_run/results.csv` y `results.jsonl` con `dx`, `dy`, `dθ`, método de detección y estado (`ok`, `out_of_tolerance`, `not_found`).
+- Puedes cambiar `logging.output_dir` por corrida para versionar resultados.
 
-## Uso
-1. Imprime un **chessboard** para A4 (por ejemplo 7x5 cuadros internos, tamaño de cuadro 25 mm).
-2. Genera la calibración (ejemplo incluido en `calibrations/chessboard_7x5_25mm.json`). Ajusta `square_size_mm` si imprimes otro tamaño.
-3. Conecta la cámara y ejecuta:
+## Demo interactiva (opcional)
 ```bash
-python scripts/main.py --camera 0 --preset presets/example_tshirt.json --calibration calibrations/chessboard_7x5_25mm.json
+python scripts/main.py --camera 0 \
+  --preset presets/example_tshirt.json \
+  --calibration calibrations/chessboard_7x5_25mm.json
+# o en modo imagen fija
+python scripts/main.py --image path/a/imagen.png --preset ... --calibration ...
 ```
-4. Teclas:
-   - `q` → salir
-   - `s` → guardar frame (debug)
-   - `c` → forzar reintento de calibración en vivo (si `mode="chessboard_live"`)
+Teclas rápidas: `q` salir, `s` guardar frame (`frame_<ts>.png`).
 
-## Notas de portabilidad (WSL → Raspberry)
-- Evita rutas absolutas; usa `Path` relativo al proyecto.
-- Parametriza índices de cámara y resoluciones (no asumas 1920x1080 en Pi 3).
-- Evita dependencias GUI pesadas. Este demo usa `cv2.imshow`; en Raspberry usa escritorio (X11/Wayland).
-- Si corres headless en Pi, desactiva GUI y guarda imágenes/estados a disco o por TCP.
-- Marca dependencias opcionales de ArUco; si no está `cv2.aruco`, el sistema cae a contornos automáticamente.
+## Pruebas y calidad
+```bash
+# Ejecutar tests unitarios (geometría, calibración, detección)
+.venv/bin/python -m pytest
+# Comprobación rápida de sintaxis
+.venv/bin/python -m compileall alignpress scripts
+```
+Los tests de calibración/detección se omiten automáticamente si no hay `cv2` o `cv2.aruco` disponible.
+
+## Logging y trazabilidad
+- CSV listo para Excel / BI con campos `frame_id`, `timestamp`, `dx_mm`, `dy_mm`, `dtheta_deg`, `status`, `detection_method`, centro y tamaño detectado.
+- JSONL para análisis posteriores o envío por red.
+- Los archivos se guardan en la carpeta indicada por `config/app.yaml`.
+
+## Notas de portabilidad
+- Todo el acceso a disco usa `pathlib` y rutas relativas.
+- El pipeline headless reutiliza los mismos presets/calibraciones para Windows y Raspberry Pi.
+- La detección intenta primero el modo configurado y cae al siguiente detector disponible.
+- Preparado para extender a 2 cámaras / Arduino en sprints posteriores (capas separadas: core, io, hw, app).

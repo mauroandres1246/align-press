@@ -1,46 +1,20 @@
-import argparse, pathlib, json, time
+import argparse
+import pathlib
+import time
+
 import cv2
-import numpy as np
+
 from alignpress.core.camera import Camera
-from alignpress.core.calibration import Calibration, chessboard_mm_per_px, aruco_mm_per_px
-from alignpress.core.geometry import Pose2D, diff_pose
+from alignpress.core.calibration import load_calibration
+from alignpress.core.geometry import Pose2D
 from alignpress.core.presets import load_preset
+from alignpress.core.alignment import LogoAligner
 from alignpress.gui.overlay import draw_ghost_rect, draw_detected_rect, draw_arrows, put_hud
-from alignpress.detection.contour_detector import detect_logo_contour
-from alignpress.detection.aruco_detector import detect_logo_aruco
-
-def load_calibration(path: pathlib.Path) -> Calibration:
-    cfg = json.loads(path.read_text())
-    if cfg.get("mode") == "constant":
-        return Calibration(mm_per_px=float(cfg["mm_per_px"]), method="constant", meta=cfg)
-    else:
-        # modo offline con imagen
-        img_path = pathlib.Path(cfg["image"])
-        if img_path.is_absolute():
-            img_path = img_path.resolve()
-        else:
-            parts = list(img_path.parts)
-            if parts and parts[0] == path.parent.name:
-                parts = parts[1:]
-                img_path = pathlib.Path(*parts) if parts else pathlib.Path(".")
-            img_path = (path.parent / img_path).resolve()
-
-        img = cv2.imread(str(img_path))
-        if img is None:
-            raise FileNotFoundError(f"No se pudo leer imagen de calibración: {img_path}")
-        if cfg["mode"] == "chessboard":
-            cal = chessboard_mm_per_px(img, tuple(cfg["pattern_size"]), float(cfg["square_size_mm"]))
-        elif cfg["mode"] == "aruco":
-            cal = aruco_mm_per_px(img, float(cfg["marker_length_mm"]), cfg.get("dictionary","DICT_5X5_50"))
-        else:
-            raise ValueError("Modo de calibración no reconocido")
-        if cal is None:
-            raise RuntimeError("Fallo la calibración en la imagen provista")
-        return cal
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--camera", type=int, default=0)
+    ap.add_argument("--image", type=str, default=None, help="Procesar una imagen fija en vez de cámara")
     ap.add_argument("--resolution", type=str, default=None, help="e.g. 1280x720")
     ap.add_argument("--preset", type=str, required=True)
     ap.add_argument("--calibration", type=str, required=True)
@@ -53,24 +27,28 @@ def main():
 
     preset = load_preset(pathlib.Path(args.preset))
     calib = load_calibration(pathlib.Path(args.calibration))
-    cam = Camera(index=args.camera, resolution=res)
+    aligner = LogoAligner(preset=preset, calibration=calib)
+    cam = None
+    static_frame = None
+    if args.image:
+        img_path = pathlib.Path(args.image).expanduser()
+        static_frame = cv2.imread(str(img_path))
+        if static_frame is None:
+            raise FileNotFoundError(f"No se pudo leer la imagen fija: {img_path}")
+        print(f"[INFO] Ejecutando en modo imagen fija: {img_path}")
+    else:
+        cam = Camera(index=args.camera, resolution=res)
 
     print(f"[INFO] mm/px: {calib.mm_per_px:.5f} (metodo: {calib.method})")
 
     target_pose = Pose2D(center=preset.target_center_px, angle_deg=preset.target_angle_deg, size=preset.target_size_px)
+    frame_idx = 0
 
     try:
         while True:
-            frame = cam.read()
-            # Detección
-            if preset.detection_mode == "aruco":
-                det = detect_logo_aruco(frame, preset.roi, preset.params)
-                if det is None:
-                    det = detect_logo_contour(frame, preset.roi, preset.params)
-            else:
-                det = detect_logo_contour(frame, preset.roi, preset.params)
-                if det is None:
-                    det = detect_logo_aruco(frame, preset.roi, preset.params)
+            frame = static_frame.copy() if static_frame is not None else cam.read()
+            analysis = aligner.process_frame(frame, timestamp=time.time(), frame_id=f"live_{frame_idx:06d}")
+            det = analysis.detection.pose
 
             # Overlay ROI
             x,y,w,h = preset.roi
@@ -82,16 +60,19 @@ def main():
             status_text = "Buscando..."
             status_color = (0,255,255)
 
-            if det is not None:
+            if det is not None and analysis.evaluation.metrics is not None:
                 draw_detected_rect(frame, det.center, det.size, det.angle_deg, color=(0,0,255), thickness=2)
-                dx_mm, dy_mm, dtheta = diff_pose(det, target_pose, calib.mm_per_px)
+                metrics = analysis.evaluation.metrics
+                dx_mm = metrics.dx_mm
+                dy_mm = metrics.dy_mm
+                dtheta = metrics.dtheta_deg
                 # flechas
                 draw_arrows(frame, target_pose.center, det.center, color=(255,255,255))
                 # HUD
                 txt = f"dx={dx_mm:+.2f} mm, dy={dy_mm:+.2f} mm, dθ={dtheta:+.2f}°"
                 put_hud(frame, txt, org=(10,30), color=(255,255,255))
                 # estado
-                if abs(dx_mm) <= preset.tolerance_mm and abs(dy_mm) <= preset.tolerance_mm and abs(dtheta) <= preset.tolerance_deg:
+                if analysis.evaluation.within_tolerance:
                     status_text = "OK"
                     status_color = (0,200,0)
                 else:
@@ -103,16 +84,22 @@ def main():
             put_hud(frame, f"{status_text}", org=(10,60), color=status_color)
 
             cv2.imshow("AlignPress Pro - Fase 1", frame)
-            key = cv2.waitKey(1) & 0xFF
+            wait_delay = 0 if static_frame is not None else 1
+            key = cv2.waitKey(wait_delay) & 0xFF
             if key == ord('q'):
                 break
             elif key == ord('s'):
                 ts = int(time.time())
                 cv2.imwrite(f"frame_{ts}.png", frame)
                 print(f"[INFO] frame guardado frame_{ts}.png")
+            elif static_frame is not None and key != 255:
+                # En modo imagen, cualquier otra tecla sale para evitar bucles infinitos
+                break
+            frame_idx += 1
 
     finally:
-        cam.release()
+        if cam is not None:
+            cam.release()
         cv2.destroyAllWindows()
 
 if __name__ == "__main__":

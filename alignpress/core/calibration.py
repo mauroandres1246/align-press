@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional, Tuple, Dict, Any
+import json
+from pathlib import Path
 import cv2
 import numpy as np
 
@@ -8,6 +10,24 @@ class Calibration:
     mm_per_px: float
     method: str
     meta: Dict[str, Any]
+    schema_version: int = 1
+
+    def to_dict(self) -> Dict[str, Any]:
+        data = {
+            "schema_version": self.schema_version,
+            "mm_per_px": float(self.mm_per_px),
+            "method": self.method,
+            "meta": self.meta,
+        }
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Calibration":
+        schema_version = int(data.get("schema_version", 1))
+        mm_per_px = float(data["mm_per_px"])
+        method = data.get("method", "unknown")
+        meta = data.get("meta", {}) or {}
+        return cls(mm_per_px=mm_per_px, method=method, meta=meta, schema_version=schema_version)
 
 def chessboard_mm_per_px(image, pattern_size=(7,5), square_size_mm=25.0) -> Optional[Calibration]:
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -43,8 +63,8 @@ def chessboard_mm_per_px(image, pattern_size=(7,5), square_size_mm=25.0) -> Opti
         mm_per_px=mm_per_px,
         method="chessboard",
         meta={
-            "pattern_size": pattern_size,
-            "square_size_mm": square_size_mm,
+            "pattern_size": list(pattern_size),
+            "square_size_mm": float(square_size_mm),
             "samples": len(dists),
         },
     )
@@ -68,4 +88,16 @@ def aruco_mm_per_px(image, marker_length_mm:float=50.0, dictionary_name:str="DIC
     side_lengths = [np.linalg.norm(pts[i]-pts[(i+1)%4]) for i in range(4)]
     mean_side_px = float(np.mean(side_lengths))
     mm_per_px = marker_length_mm / mean_side_px
-    return Calibration(mm_per_px=mm_per_px, method="aruco", meta={"marker_length_mm":marker_length_mm, "dictionary":dictionary_name})
+    return Calibration(
+        mm_per_px=mm_per_px,
+        method="aruco",
+        meta={"marker_length_mm": float(marker_length_mm), "dictionary": dictionary_name},
+    )
+
+def save_calibration(calibration: Calibration, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(calibration.to_dict(), indent=2))
+
+def load_calibration(path: Path) -> Calibration:
+    data = json.loads(path.read_text())
+    return Calibration.from_dict(data)

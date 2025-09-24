@@ -1,9 +1,13 @@
 {
-  "mode": "chessboard",
-  "image": "calibrations/chessboard_sample.jpg",
-  "pattern_size": [
-    7,
-    5
-  ],
-  "square_size_mm": 25.0
+  "schema_version": 1,
+  "mm_per_px": 0.12,
+  "method": "chessboard",
+  "meta": {
+    "pattern_size": [
+      7,
+      5
+    ],
+    "square_size_mm": 25.0,
+    "source_image": "calibrations/chessboard_sample.jpg"
+  }
 }
