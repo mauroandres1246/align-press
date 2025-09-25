@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from dataclasses import fields as dataclass_fields
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -17,7 +18,7 @@ class Config:
     active_style_id: Optional[str] = None
     active_variant_id: Optional[str] = None
 
-    def to_dict(self) -> Dict[str, str]:
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "version": self.version,
             "language": self.language,
@@ -29,8 +30,11 @@ class Config:
         }
 
     @classmethod
-    def from_dict(cls, raw: Dict[str, str]) -> "Config":
-        data = {**cls().to_dict(), **raw}
+    def from_dict(cls, raw: Mapping[str, Any]) -> "Config":
+        defaults = cls().to_dict()
+        allowed = {field.name for field in dataclass_fields(cls)}
+        filtered = {key: raw[key] for key in raw if key in allowed and raw[key] is not None}
+        data = {**defaults, **filtered}
         return cls(**data)
 
 

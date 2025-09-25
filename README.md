@@ -104,6 +104,11 @@ python -m scripts.run_ui --config config/app.yaml
 ```
 *(En Windows nativo o Linux con escritorio no necesitas las variables DISPLAY).* 
 
+UI simplificada (AlignPress v2 prototype):
+```bash
+python -m scripts.run_ui_v2 --config config/app.yaml
+```
+
 Modo headless para validar el core:
 ```bash
 python scripts/process_dataset.py --config config/app.yaml

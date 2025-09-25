@@ -39,8 +39,14 @@ class MainWindow:
         """Allow the controller to perform cleanup when the window closes."""
 
         if callback is None:
+            self._root.protocol("WM_DELETE_WINDOW", self._root.destroy)
             return
-        self._root.protocol("WM_DELETE_WINDOW", callback)
+
+        def _wrapped() -> None:
+            callback()
+            self._root.destroy()
+
+        self._root.protocol("WM_DELETE_WINDOW", _wrapped)
 
 
 from alignpress_v2.controller.app_controller import AppController  # noqa: E402
