@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "mm_per_px": 0.343168857761284,
+  "method": "chessboard",
+  "meta": {
+    "pattern_size": [
+      6,
+      4
+    ],
+    "square_size_mm": 25.0,
+    "samples": 38
+  }
+}

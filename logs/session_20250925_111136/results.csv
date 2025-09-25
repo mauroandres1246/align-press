@@ -1,0 +1,2 @@
+frame_id,timestamp,status,within_tolerance,detection_method,cx_px,cy_px,angle_deg,width_px,height_px,dx_mm,dy_mm,dtheta_deg,session_id,preset_name,dataset_path
+sample image.jpg,0.0,out_of_tolerance,False,contour,1015.0,1419.0,90.0,596.0,446.0,-78.2,10.279999999999982,90.0,session_20250925_111136,Estilo Camiseta:pecho,/home/mauro/code/alignpress_pro_phase1/datasets/sample_images

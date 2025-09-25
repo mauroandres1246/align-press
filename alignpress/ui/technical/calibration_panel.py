@@ -62,8 +62,8 @@ class CalibrationPanel(QWidget):
         self._pattern_h = QSpinBox()
         for widget in (self._pattern_w, self._pattern_h):
             widget.setRange(2, 20)
-        self._pattern_w.setValue(7)
-        self._pattern_h.setValue(5)
+        self._pattern_w.setValue(6)
+        self._pattern_h.setValue(4)
         pattern_layout = QHBoxLayout()
         pattern_layout.addWidget(self._pattern_w)
         pattern_layout.addWidget(QLabel("x"))
@@ -179,16 +179,18 @@ class CalibrationPanel(QWidget):
                     if ids is not None and len(corners) > 0:
                         aruco.drawDetectedMarkers(preview, corners, ids)
 
+        # Siempre mostrar preview de la imagen, incluso si falla detección
+        qimg = cv_to_qimage(preview)
+        pixmap = QPixmap.fromImage(qimg)
+        self._last_preview_pixmap = pixmap
+        self._update_preview_pixmap()
+
         if calibration is None:
             self.errorRaised.emit(self._i18n("messages.error.generic"))
             return
 
         self._current_calibration = replace(calibration)
         self._mm_per_px_label.setText(f"mm/px: {calibration.mm_per_px:.5f}")
-        qimg = cv_to_qimage(preview)
-        pixmap = QPixmap.fromImage(qimg)
-        self._last_preview_pixmap = pixmap
-        self._update_preview_pixmap()
         self.calibrationComputed.emit(calibration)
         self.messageRaised.emit(self._i18n("technical.calibration.title"))
 

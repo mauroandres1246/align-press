@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: alignpress
+Version: 0.1.0
+Summary: AlignPress - Vision-guided alignment system for textile printing
+Author-email: Mauro <mauro@example.com>
+Requires-Python: >=3.10
+Requires-Dist: numpy>=1.24
+Requires-Dist: opencv-python>=4.8
+Requires-Dist: opencv-contrib-python>=4.8
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: PySide6>=6.7
+Requires-Dist: pytest>=7.4
