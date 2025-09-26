@@ -26,15 +26,38 @@ def launch_config_designer():
         print(f"❌ Error launching config designer: {e}")
 
 
-def launch_detection_simulator(image_path=None, config_path=None):
-    """Launch detection simulator"""
+def launch_calibration_tool():
+    """Launch the visual calibration tool"""
+    try:
+        from alignpress_v2.tools.calibration_tool import CalibrationTool
+        app = CalibrationTool()
+        app.run()
+    except ImportError as e:
+        print(f"❌ Error: GUI dependencies not available: {e}")
+        print("   Instala: pip install opencv-python pillow")
+    except Exception as e:
+        print(f"❌ Error launching calibration tool: {e}")
+
+
+def launch_detection_simulator(image_path=None, config_path=None, calibration_path=None, batch_mode=False):
+    """Launch enhanced detection simulator with real image processing"""
     try:
         from alignpress_v2.tools.detection_simulator import DetectionSimulator
         from alignpress_v2.config.config_manager import ConfigManager
         from alignpress_v2.config.models import create_default_config
+        import time
 
         simulator = DetectionSimulator()
 
+        # Load calibration if provided
+        if calibration_path and Path(calibration_path).exists():
+            print(f"📏 Loading calibration from: {calibration_path}")
+            if simulator.load_calibration(Path(calibration_path)):
+                print(f"   ✅ Calibration loaded: {simulator.mm_per_pixel:.4f} mm/pixel")
+            else:
+                print("   ❌ Failed to load calibration")
+
+        # Load configuration
         if config_path:
             print(f"📖 Loading config from: {config_path}")
             config_manager = ConfigManager(Path(config_path))
@@ -48,10 +71,43 @@ def launch_detection_simulator(image_path=None, config_path=None):
             print("❌ No active style found in configuration")
             return
 
-        if image_path:
+        if batch_mode and image_path:
+            # Batch processing mode
+            print(f"🔄 Starting batch simulation in: {image_path}")
+            batch_results = simulator.simulate_batch_with_variants(
+                image_dir=Path(image_path),
+                config=config,
+                calibration_path=Path(calibration_path) if calibration_path else None,
+                image_pattern="**/*.jpg",
+                test_variants=True
+            )
+
+            if 'error' in batch_results:
+                print(f"❌ Batch processing error: {batch_results['error']}")
+                return
+
+            # Print batch summary
+            stats = batch_results.get('batch_stats', {})
+            print(f"\n📊 BATCH RESULTS:")
+            print(f"   Images processed: {batch_results.get('images_processed', 0)}")
+            print(f"   Total detections: {batch_results.get('total_detections', 0)}")
+            print(f"   Variants tested: {batch_results.get('variants_tested', 0)}")
+            print(f"   Session success rate: {stats.get('session_success_rate', 0):.1%}")
+            print(f"   Logo detection rate: {stats.get('logo_success_rate', 0):.1%}")
+            print(f"   Average confidence: {stats.get('average_confidence', 0):.3f}")
+
+            # Export results
+            output_dir = Path(f"results/batch_{int(time.time())}")
+            print(f"\n💾 Exporting results to: {output_dir}")
+            simulator.export_batch_results(batch_results, output_dir, create_debug_images=True)
+            print(f"   ✅ Results exported successfully")
+
+        elif image_path:
+            # Single image mode
             print(f"🎯 Simulating detection on: {image_path}")
             result = simulator.simulate_garment_detection(
-                Path(image_path), style, config
+                Path(image_path), style, config,
+                calibration_path=Path(calibration_path) if calibration_path else None
             )
 
             # Print results
@@ -61,13 +117,26 @@ def launch_detection_simulator(image_path=None, config_path=None):
             print(f"   Processing time: {result.get('processing_time_ms', 0):.1f}ms")
             print(f"   Average confidence: {result.get('average_confidence', 0):.3f}")
 
+            # Show individual logo results
+            logo_results = result.get('logo_results', [])
+            if logo_results:
+                print(f"\n📋 Individual Logo Results:")
+                for logo_result in logo_results:
+                    logo_id = logo_result.get('logo_id', 'unknown')
+                    detected = logo_result.get('success', False)
+                    confidence = logo_result.get('confidence', 0)
+                    status = "✅" if detected else "❌"
+                    print(f"   {status} {logo_id}: {confidence:.3f} confidence")
+
             # Create debug image
             debug_path = simulator.create_visual_debug_image(Path(image_path), result)
             if debug_path:
-                print(f"🖼️  Debug image created: {debug_path}")
+                print(f"\n🖼️  Debug image created: {debug_path}")
 
         else:
             print("ℹ️  No image specified. Use --image to test detection.")
+            print("   For batch mode, use --batch flag with directory path.")
+            print("   Example: --simulator --image test_images/ --batch --calibration calibration.json")
 
     except ImportError as e:
         print(f"❌ Error: Dependencies not available: {e}")
@@ -124,49 +193,94 @@ def show_menu():
         print("\n" + "=" * 50)
         print("🛠️  ALIGNPRESS v2 - DEVELOPMENT TOOLS")
         print("=" * 50)
-        print("1. 🎨 Configuration Designer (GUI)")
-        print("2. 🔍 Detection Simulator")
-        print("3. 🎽 Example: Camisola Workflow")
-        print("4. 🖥️  Launch Main UI Application")
-        print("5. ✅ Run Integration Tests")
-        print("6. ❓ Show Help")
+        print("1. 📏 Visual Calibration Tool")
+        print("2. 🎨 Configuration Designer (GUI)")
+        print("3. 🔍 Detection Simulator")
+        print("4. 🎽 Example: Camisola Workflow")
+        print("5. 🖥️  Launch Main UI Application")
+        print("6. ✅ Run Integration Tests")
+        print("7. ❓ Show Help")
         print("0. 🚪 Exit")
         print("-" * 50)
 
         try:
-            choice = input("Selecciona una opción (0-6): ").strip()
+            choice = input("Selecciona una opción (0-7): ").strip()
 
             if choice == "0":
                 print("👋 ¡Hasta luego!")
                 break
 
             elif choice == "1":
+                print("\n📏 Launching Visual Calibration Tool...")
+                launch_calibration_tool()
+
+            elif choice == "2":
                 print("\n🎨 Launching Configuration Designer...")
                 launch_config_designer()
 
-            elif choice == "2":
-                print("\n🔍 Detection Simulator Options:")
-                image_path = input("Image path (optional): ").strip()
-                config_path = input("Config path (optional): ").strip()
-
-                if image_path and not Path(image_path).exists():
-                    print(f"❌ Image not found: {image_path}")
-                    continue
-
-                if config_path and not Path(config_path).exists():
-                    print(f"❌ Config not found: {config_path}")
-                    continue
-
-                launch_detection_simulator(
-                    image_path if image_path else None,
-                    config_path if config_path else None
-                )
-
             elif choice == "3":
+                print("\n🔍 Detection Simulator Options:")
+                print("1. Single image simulation")
+                print("2. Batch processing with variants")
+
+                sim_choice = input("Choose mode (1-2): ").strip()
+
+                if sim_choice == "1":
+                    image_path = input("Image path: ").strip()
+                    config_path = input("Config path (optional): ").strip()
+                    calibration_path = input("Calibration path (optional): ").strip()
+
+                    if image_path and not Path(image_path).exists():
+                        print(f"❌ Image not found: {image_path}")
+                        continue
+
+                    if config_path and not Path(config_path).exists():
+                        print(f"❌ Config not found: {config_path}")
+                        continue
+
+                    if calibration_path and not Path(calibration_path).exists():
+                        print(f"❌ Calibration not found: {calibration_path}")
+                        continue
+
+                    launch_detection_simulator(
+                        image_path if image_path else None,
+                        config_path if config_path else None,
+                        calibration_path if calibration_path else None,
+                        batch_mode=False
+                    )
+
+                elif sim_choice == "2":
+                    image_dir = input("Image directory: ").strip()
+                    config_path = input("Config path: ").strip()
+                    calibration_path = input("Calibration path (optional): ").strip()
+
+                    if not Path(image_dir).exists():
+                        print(f"❌ Directory not found: {image_dir}")
+                        continue
+
+                    if not Path(config_path).exists():
+                        print(f"❌ Config not found: {config_path}")
+                        continue
+
+                    if calibration_path and not Path(calibration_path).exists():
+                        print(f"❌ Calibration not found: {calibration_path}")
+                        continue
+
+                    launch_detection_simulator(
+                        image_dir,
+                        config_path,
+                        calibration_path if calibration_path else None,
+                        batch_mode=True
+                    )
+
+                else:
+                    print("❌ Invalid choice. Try again.")
+
+            elif choice == "4":
                 print("\n🎽 Running Example Workflow...")
                 run_example_workflow()
 
-            elif choice == "4":
+            elif choice == "5":
                 print("\n🖥️  UI Application Options:")
                 config_path = input("Config path (optional): ").strip()
 
@@ -176,7 +290,7 @@ def show_menu():
 
                 launch_ui_app(config_path if config_path else None)
 
-            elif choice == "5":
+            elif choice == "6":
                 print("\n✅ Running Integration Tests...")
                 result = run_integration_tests()
                 if result == 0:
@@ -184,7 +298,7 @@ def show_menu():
                 else:
                     print("💥 Some tests failed!")
 
-            elif choice == "6":
+            elif choice == "7":
                 show_help()
 
             else:
@@ -209,41 +323,53 @@ def show_help():
 
 HERRAMIENTAS DISPONIBLES:
 
-1. 🎨 Configuration Designer
+1. 📏 Visual Calibration Tool
+   - Herramienta GUI para calibración de plancha con patrones
+   - Soporte para Chessboard y ArUco markers
+   - Cálculo automático de factor mm/pixel
+   - Visualización de detección en tiempo real
+   - Exportación de calibraciones y reportes
+
+2. 🎨 Configuration Designer
    - Herramienta GUI interactiva para crear configuraciones
    - Permite colocar logos visualmente en imágenes
    - Genera automáticamente ROIs y posiciones
    - Exporta configuraciones en YAML/JSON
 
-2. 🔍 Detection Simulator
+3. 🔍 Detection Simulator
    - Simula algoritmos de detección sin hardware
    - Prueba configuraciones con imágenes estáticas
    - Genera imágenes de debug con resultados
    - Calcula métricas de rendimiento
 
-3. 🎽 Example Workflow
+4. 🎽 Example Workflow
    - Ejemplo completo de configuración para camisola de fútbol
    - Demuestra múltiples logos y variantes de talla
    - Muestra flujo completo de configuración → almacenamiento → detección
 
-4. 🖥️  Main UI Application
+5. 🖥️  Main UI Application
    - Interfaz principal de AlignPress v2 con CustomTkinter
    - Viewport de cámara con overlays
    - Panel de control con métricas en tiempo real
    - Integración completa con el sistema de eventos
 
-5. ✅ Integration Tests
+6. ✅ Integration Tests
    - Prueba todos los componentes funcionando juntos
    - Valida la arquitectura completa
    - Verificación automática de funcionalidades
 
 FLUJO DE DESARROLLO RECOMENDADO:
 
-1. Crear configuración inicial:
+1. Calibrar plancha:
+   → Usar "Visual Calibration Tool" con imagen de plancha
+   → Detectar patrón (chessboard o ArUco)
+   → Obtener factor mm/pixel preciso
+
+2. Crear configuración inicial:
    → Ejecutar "Example Workflow" para ver el patrón
    → Usar "Configuration Designer" para crear tu configuración específica
 
-2. Probar algoritmos de detección:
+3. Probar algoritmos de detección:
    → Usar "Detection Simulator" con imágenes de prueba
    → Ajustar parámetros basándose en resultados
    → Iterar hasta obtener precisión deseada
@@ -291,14 +417,18 @@ def main():
         epilog="""
 Examples:
   python dev_tools_launcher.py                    # Interactive menu
+  python dev_tools_launcher.py --calibration      # Launch calibration tool
   python dev_tools_launcher.py --config-designer  # Launch config designer
-  python dev_tools_launcher.py --simulator --image test.jpg
+  python dev_tools_launcher.py --simulator --image test.jpg --config config.yaml
+  python dev_tools_launcher.py --simulator --image test_images/ --batch --calibration cal.json
   python dev_tools_launcher.py --example          # Run example workflow
   python dev_tools_launcher.py --ui --config config.yaml
   python dev_tools_launcher.py --tests            # Run integration tests
         """
     )
 
+    parser.add_argument('--calibration', action='store_true',
+                       help='Launch visual calibration tool')
     parser.add_argument('--config-designer', action='store_true',
                        help='Launch configuration designer')
     parser.add_argument('--simulator', action='store_true',
@@ -313,14 +443,20 @@ Examples:
                        help='Image path for simulator')
     parser.add_argument('--config', type=str,
                        help='Configuration file path')
+    parser.add_argument('--calibration-file', type=str,
+                       help='Calibration file path for simulator')
+    parser.add_argument('--batch', action='store_true',
+                       help='Enable batch processing mode for simulator')
 
     args = parser.parse_args()
 
     # Check if any specific tool was requested
-    if args.config_designer:
+    if args.calibration:
+        launch_calibration_tool()
+    elif args.config_designer:
         launch_config_designer()
     elif args.simulator:
-        launch_detection_simulator(args.image, args.config)
+        launch_detection_simulator(args.image, args.config, args.calibration_file, args.batch)
     elif args.example:
         return run_example_workflow()
     elif args.ui:

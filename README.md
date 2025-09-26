@@ -1,128 +1,352 @@
-# AlignPress Pro — Sprint 2.1 (Planchas + Estilos + Tallas)
+# AlignPress v2 — Sistema de Detección Visual de Logos
 
-La segunda entrega incorpora la arquitectura completa de planchas, estilos y tallas, además de una UX guiada para operador y técnico. El núcleo de detección del Sprint 1 se reutiliza; ahora se generan presets dinámicamente combinando plancha calibrada + estilo (lista de logos) + variante por talla.
+Sistema moderno de detección y alineación de logos con interfaz CustomTkinter, arquitectura MVC y herramientas completas de desarrollo. Diseñado para operación industrial con debugging avanzado y configuración multi-logo.
 
-## Arquitectura
+## 🏗️ Arquitectura
 
-### Dominio (`alignpress/domain`)
-- **PlatenProfile** (`platen.py`): nombre, tamaño en mm, calibración (mm/px, patrón, última verificación).
-- **StyleDefinition** (`style.py`): estilo/diseño con lista de logos, parámetros detector y geometría en mm.
-- **SizeVariant** (`variant.py`): offsets/escala por talla respecto al estilo base.
-- **Composition** (`composition.py`): combina plancha + estilo + talla → presets `LogoTaskDefinition` listos para el `LogoAligner`.
-- **JobCard** (`job.py`): tarjeta de trabajo por prenda procesada (timestamp, plancha, estilo, talla, métricas por logo, snapshot opcional).
+### **Arquitectura v2 (Principal) - CustomTkinter/MVC**
+```
+alignpress_v2/
+├── config/          # Sistema de configuración unificado
+│   ├── models.py    # Dataclasses para configuración
+│   └── config_manager.py  # Gestión de configuración
+├── controller/      # Controladores MVC + Event Bus
+│   ├── app_controller.py   # Controlador principal
+│   ├── state_manager.py    # Gestión de estado centralizado
+│   └── event_bus.py        # Sistema de eventos desacoplado
+├── services/        # Servicios de negocio
+│   ├── detection_service.py    # Detección de logos
+│   ├── calibration_service.py  # Calibración de cámara
+│   └── composition_service.py  # Composición de presets
+├── infrastructure/ # Abstracción de hardware
+│   └── hardware.py          # HAL para GPIO, Arduino, etc.
+├── ui/             # Interfaz CustomTkinter moderna
+│   ├── main_window.py      # Ventana principal
+│   ├── components/         # Componentes reutilizables
+│   └── app.py             # Launcher de aplicación
+└── tools/          # Herramientas de desarrollo
+    ├── config_designer.py  # Diseñador visual GUI
+    └── detection_simulator.py  # Simulador para debugging
+```
 
-### Configuración (`config/app.yaml`)
+### **Arquitectura Legacy - PySide6/MVVM**
+```
+alignpress/         # Implementación original (mantenida)
+├── domain/         # Modelos de dominio
+├── ui/             # Interfaz PySide6
+└── core/           # Algoritmos de detección
+```
+
+## ⚙️ Configuración
+
+### **Sistema Unificado v2 (Recomendado)**
+La configuración v2 usa un solo archivo YAML con toda la configuración:
+
 ```yaml
+# config/app_v2.yaml
+version: "2.0.0"
+system:
+  language: "es"
+  units: "mm"
+  theme: "light"
+
+calibration:
+  factor_mm_px: 0.2645
+  timestamp: "2024-01-15T10:30:00"
+  method: "chessboard_auto"
+
+hardware:
+  camera:
+    device_id: 0
+    resolution: [1920, 1080]
+    fps: 30
+  gpio:
+    enabled: true
+    led_pin: 18
+    button_pin: 19
+
+library:
+  styles:
+    - id: "comunicaciones_2024"
+      name: "Camisola Comunicaciones"
+      logos:
+        - id: "escudo_principal"
+          position_mm: {x: 100.0, y: 80.0}
+          tolerance_mm: 3.0
+          detector_type: "contour"
+          roi: {x: 70, y: 50, width: 60, height: 60}
+
+  variants:
+    - id: "comunicaciones_2024_s"
+      size: "S"
+      scale_factor: 0.90
+      offsets:
+        escudo_principal: {x: -8.0, y: -5.0}
+
+session:
+  active_style_id: "comunicaciones_2024"
+  active_variant_id: "comunicaciones_2024_m"
+```
+
+### **Configuración Legacy**
+```yaml
+# config/app.yaml (para compatibilidad)
 schema_version: 3
 language: es
-dataset:
-  path: datasets/sample_images
-  fps: 30.0
-  loop: false
-logging:
-  output_dir: logs
-  formats: [csv, json]
-ui:
-  theme: light
-  technical_pin: '2468'
 assets:
   platens_dir: platens
   styles_dir: styles
   variants_dir: variants
-  job_cards_dir: logs/job_cards
-selection:
-  platen_path: platens/default_platen.json
-  style_path: styles/example_style.json
-  variant_path: variants/example_variant.json
-calibration_reminder_days: 7
-calibration_expire_days: 30
 ```
-- `assets` define directorios donde se guardan los JSON versionados.
-- `selection` marca la combinación activa (se actualiza desde el wizard de operador).
-- `calibration_reminder_days` / `calibration_expire_days` controlan el chip de calibración.
 
-### Archivos de ejemplo
-- `platens/default_platen.json`: plancha 40x50 mm/px calibrada.
-- `styles/example_style.json`: estilo con logos “Pecho” y “Manga”, posiciones en mm y parámetros de detector.
-- `variants/example_variant.json`: talla L con offsets y escala.
+## 🚀 Ejecución
 
-## UI Operador
-1. **Wizard de selección**: Paso a paso plancha → estilo → talla. La selección se guarda y se recalculan presets.
-2. **Header**: muestra Plancha, Estilo, Talla y Versión activos. Chip de calibración 🟢/🟠/🔴 según antigüedad.
-3. **Checklist**: lista de logos pendiente/OK/Ajustar, con navegación manual o auto avance al obtener “OK”.
-4. **Viewport**: overlay fantasma del logo, detección actual, flechas, métricas (`dx/dy/θ`). Tooltips de corrección (“Mover 2.1 mm ↓”, “Rotar 1.2° ↻”).
-5. **Historial**: tabla con estado por frame/logos. Exportable a CSV/JSON (`Archivo → Exportar resultados`).
-6. **Snapshots**: botón y atajo `S` guardan imagen con overlay.
-7. **Finalización**: al completar todos los logos se genera un Job Card en `logs/job_cards/job_*.json` con métricas, estados y dataset usado.
-
-Atajos: `Espacio` (Play/Pause), `F11` (Pantalla completa), `S` (Snapshot). El dataset se procesa en modo simulación; cada sesión genera resultados en `logs/session_*/`.
-
-## UI Técnico
-La vista técnica ahora tiene tres editores en pestañas:
-
-1. **Planchas**
-   - Lista de perfiles (`platens/*.json`).
-   - Campos para tamaño (mm), mm/px, patrón, fecha de verificación.
-   - Botón “Calibrar…” abre el panel de calibración (`CalibrationPanel`) para calcular mm/px desde un chessboard.
-   - Importar/exportar/duplicar/eliminar con guardado directo a JSON.
-
-2. **Estilos**
-   - Lista de estilos (`styles/*.json`).
-   - Edición de logos: posición objetivo (mm), ROI, detector (contour/ArUco), tolerancias, instrucciones para operador y parámetros JSON del detector.
-   - Añadir/duplicar/eliminar logos desde la UI, todo persistente en JSON.
-
-3. **Tallas**
-   - Lista de variantes (`variants/*.json`).
-   - Asociación con estilo base, factor de escala y overrides por logo (offsets en mm, escala relativa, tolerancias específicas).
-   - Importar/exportar, duplicar y guardar.
-
-Al guardar plancha/estilo/talla se emite `dataChanged` → la combinación activa se recalcula automáticamente para el operador.
-
-## Flujo Operador
-1. Abrir wizard (botón “Cambiar preset”).
-2. Seleccionar plancha/estilo/talla y confirmar.
-3. Revisar cada logo hasta obtener checklist ✅.
-4. Exportar resultados o guardar snapshot según necesidad.
-5. Revisar “job card” generado en `logs/job_cards/` para trazabilidad.
-
-## Flujo Técnico
-1. Configurar planchas: definir dimensiones y recalibrar cuando corresponde.
-2. Crear/editar estilos agregando logos en mm (coordenadas absolutas sobre la plancha calibrada).
-3. Crear variantes por talla, ajustando offsets y escala.
-4. Notificar al operador tras guardar (la app recarga la combinación automáticamente).
-
-## Logging & Evidencias
-- `logs/session_*`: CSV/JSON por sesión (frame, logo, dx/dy/θ, método, estado). Snapshots opcionales en `logs/session_*/snapshots/`.
-- `logs/job_cards/job_*.json`: tarjeta de trabajo por prenda con lista de logos, métricas y estado final.
-
-## Ejecución
+### **AlignPress v2 (Recomendado)**
 ```bash
-source .venv/bin/activate
-export DISPLAY=$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}'):0.0
-export LIBGL_ALWAYS_INDIRECT=1
+# Aplicación principal con UI moderna
+python run_alignpress_v2.py
+
+# Con configuración específica
+python run_alignpress_v2.py --config configs/examples/comunicaciones_2024_complete.yaml
+
+# Herramientas de desarrollo (menú interactivo)
+python dev_tools_launcher.py
+
+# Ejemplo completo de configuración multi-logo
+python example_camisola_workflow.py
+```
+
+### **Aplicación Legacy**
+```bash
+# PySide6 UI (compatibilidad)
 python -m scripts.run_ui --config config/app.yaml
-```
-*(En Windows nativo o Linux con escritorio no necesitas las variables DISPLAY).* 
 
-UI simplificada (AlignPress v2 prototype):
-```bash
-python -m scripts.run_ui_v2 --config config/app.yaml
-```
-
-Modo headless para validar el core:
-```bash
+# Procesamiento sin interfaz
 python scripts/process_dataset.py --config config/app.yaml
 ```
 
-## Pruebas y validación
+### **Validación y Testing**
 ```bash
-.venv/bin/python -m pytest
-.venv/bin/python -m compileall alignpress scripts
-```
-Las pruebas cubren geometría, calibración y detección. El pipeline de composición se valida al ejecutar la app generando presets y job cards.
+# Validar arquitectura v2
+python validate_v2_architecture.py
 
-## Notas
-- Todos los JSON poseen `schema_version` para evolucionar el dominio.
-- Las rutas en `config/app.yaml` se guardan en relativo; los editores crean directorios automáticamente si no existen.
-- El chip de calibración cambia a 🟠 o 🔴 cuando `last_verified` supera los días configurados (7 y 30 por defecto).
-- Los parámetros de detector se editan como JSON libre; el operador verá las instrucciones asociadas a cada logo.
+# Tests de integración
+python test_ui_integration.py
+
+# Tests completos
+python -m pytest
+```
+
+## 🛠️ Herramientas de Desarrollo
+
+### **1. Launcher Principal**
+```bash
+python dev_tools_launcher.py
+```
+Menú interactivo con acceso a todas las herramientas:
+- 🎨 Configuration Designer (GUI)
+- 🔍 Detection Simulator
+- 🎽 Example Workflows
+- 🖥️ UI Application
+- ✅ Integration Tests
+
+### **2. Configuration Designer**
+```bash
+python -m alignpress_v2.tools.config_designer
+```
+**Herramienta GUI para:**
+- Cargar imágenes de prendas
+- Colocar logos visualmente con el mouse
+- Definir ROIs interactivamente
+- Generar configuraciones automáticamente
+- Exportar a YAML/JSON
+
+### **3. Detection Simulator**
+```bash
+python dev_tools_launcher.py --simulator --image test.jpg --config config.yaml
+```
+**Simulador para development sin hardware:**
+- Prueba algoritmos con imágenes estáticas
+- Genera imágenes de debug con overlays
+- Calcula métricas de precisión y velocidad
+- Simula variantes de talla automáticamente
+
+### **4. Example Workflows**
+```bash
+python example_camisola_workflow.py
+```
+**Ejemplo completo que demuestra:**
+- Configuración de camisola con múltiples logos
+- Variantes por talla (XS, S, M, L, XL, XXL)
+- Flujo completo: configurar → guardar → simular → validar
+
+## 📋 Casos de Uso Documentados
+
+### **Camisola de Fútbol con Múltiples Logos**
+```python
+# Configuración para camisola con:
+# - Escudo principal (centro pecho)
+# - Sponsor principal (pecho izquierdo)
+# - Sponsor técnico (pecho derecho)
+# - 6 variantes de talla con ajustes automáticos
+
+style = Style(
+    id="comunicaciones_2024",
+    name="Camisola Comunicaciones 2024",
+    logos=[
+        Logo(id="escudo", position_mm=Point(100, 80), tolerance_mm=3.0),
+        Logo(id="sponsor_1", position_mm=Point(50, 120), tolerance_mm=2.5),
+        Logo(id="sponsor_2", position_mm=Point(150, 120), tolerance_mm=2.5)
+    ]
+)
+```
+
+Ver `example_camisola_workflow.py` para implementación completa.
+
+## 🖥️ Interfaz de Usuario
+
+### **UI v2 - CustomTkinter (Principal)**
+- ✅ **Viewport moderno** con overlays en tiempo real
+- ✅ **Panel de control** con métricas y estado del sistema
+- ✅ **Event-driven updates** automáticos
+- ✅ **Keyboard shortcuts** (Space, F11, S, Escape)
+- ✅ **Fallback a Tkinter** si CustomTkinter no disponible
+
+### **UI Legacy - PySide6**
+- 📱 Wizard de selección paso a paso
+- 📊 Checklist de logos con navegación
+- 🎯 Viewport con overlay fantasma y métricas
+- 📈 Historial exportable (CSV/JSON)
+- 📸 Sistema de snapshots
+
+## 📁 Estructura de Archivos
+
+### **Configuraciones v2**
+```
+configs/
+├── examples/
+│   ├── comunicaciones_2024_complete.yaml    # Configuración completa
+│   └── comunicaciones_2024_style_only.json  # Solo estilo
+├── production/                              # Configuraciones de producción
+└── templates/                               # Plantillas reutilizables
+```
+
+### **Imágenes de Prueba**
+```
+test_images/
+├── comunicaciones_2024/
+│   ├── talla_s/
+│   ├── talla_m/
+│   └── talla_xl/
+└── debug_outputs/                           # Imágenes de debug generadas
+```
+
+### **Logs y Resultados**
+```
+logs/
+├── session_*/                               # Sesiones de detección
+├── job_cards/                              # Tarjetas de trabajo
+└── performance_metrics/                     # Métricas de rendimiento
+```
+
+## 🔄 Flujo de Trabajo Recomendado
+
+### **1. Configuración Inicial**
+1. Ejecutar `python example_camisola_workflow.py` para ver el patrón
+2. Usar Configuration Designer para crear configuración específica
+3. Definir logos y sus posiciones visualmente
+
+### **2. Desarrollo y Testing**
+1. Usar Detection Simulator con imágenes de prueba
+2. Ajustar parámetros basándose en resultados de debug
+3. Iterar hasta lograr precisión deseada
+
+### **3. Producción**
+1. Ejecutar Integration Tests para validar sistema
+2. Usar UI principal para operación
+3. Monitorear métricas y logs
+
+## 📦 Dependencias
+
+### **Core Requirements**
+```bash
+pip install opencv-python>=4.8 customtkinter>=5.2 pyyaml>=6.0 numpy>=1.24
+```
+
+### **Development Tools**
+```bash
+pip install pillow>=10.0  # Para Configuration Designer y simulador
+```
+
+### **Legacy Support**
+```bash
+pip install PySide6>=6.7  # Solo para UI legacy
+```
+
+## 🧪 Testing y Validación
+
+### **Tests Automáticos**
+```bash
+# Arquitectura v2
+python -m pytest alignpress_v2/tests/
+
+# Integración completa
+python test_ui_integration.py
+
+# Validación de arquitectura
+python validate_v2_architecture.py
+```
+
+### **Tests Manuales**
+1. **Configuration Designer**: Crear configuración con GUI
+2. **Detection Simulator**: Probar con imágenes reales
+3. **UI Integration**: Workflow completo operador
+
+## 🚧 Migration Guide v1 → v2
+
+### **Migrar Configuración**
+```python
+# El ConfigManager v2 incluye migración automática
+config_manager = ConfigManager("old_config.yaml")
+v2_config = config_manager.load()  # Migra automáticamente
+```
+
+### **Migrar Flujos de Trabajo**
+- ✅ **Detección**: Compatible automáticamente
+- ✅ **Calibración**: Migración transparente
+- ⚠️ **UI**: Requiere adaptación a nuevos componentes
+
+## 📞 Soporte
+
+### **Logs y Debugging**
+- Logs estructurados en `alignpress_v2.log`
+- Imágenes de debug automáticas en simulador
+- Métricas de performance integradas
+
+### **Herramientas de Diagnóstico**
+- `python validate_v2_architecture.py` - Validación completa
+- `python test_ui_integration.py` - Tests de integración
+- `python dev_tools_launcher.py --tests` - Suite de pruebas
+
+---
+
+## 📝 Notas de Versión
+
+### **v2.0.0 - CustomTkinter/MVC Architecture**
+- ✅ Arquitectura MVC moderna con Event Bus
+- ✅ UI CustomTkinter con componentes modulares
+- ✅ Sistema de configuración unificado
+- ✅ Herramientas completas de desarrollo
+- ✅ Simulador de detección sin hardware
+- ✅ Hardware Abstraction Layer (HAL)
+- ✅ Multi-logo workflow documentado
+
+### **v1.x - PySide6/MVVM (Legacy)**
+- 📱 UI PySide6 con wizard de configuración
+- 📊 Sistema de planchas, estilos y variantes
+- 🎯 Detección con overlay fantasma
+- 📈 Logging y job cards detallados
+
+---
+
+**El sistema v2 está listo para desarrollo y testing. Para producción en Raspberry Pi, seguir el flujo de trabajo recomendado y usar las herramientas de validación.**

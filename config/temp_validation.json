@@ -7,7 +7,7 @@
   },
   "calibration": {
     "factor_mm_px": 0.5,
-    "timestamp": "2025-09-25T21:51:07.744366",
+    "timestamp": "2025-09-25T23:27:53.809073",
     "method": "validation_test",
     "pattern_type": "chessboard",
     "pattern_size": [

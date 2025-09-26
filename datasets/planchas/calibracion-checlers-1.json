@@ -1,0 +1,15 @@
+{
+  "factor_mm_px": 0.35262802243232727,
+  "timestamp": "2025-09-26T08:16:48.947897",
+  "method": "chessboard_visual_tool",
+  "pattern_type": "chessboard",
+  "pattern_size": [
+    6,
+    7
+  ],
+  "source_image": "/home/mauro/code/alignpress_pro_phase1/datasets/planchas/debug-foto-planca-3.jpg",
+  "image_resolution": [
+    1626,
+    1930
+  ]
+}

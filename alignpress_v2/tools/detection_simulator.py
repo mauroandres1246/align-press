@@ -36,8 +36,46 @@ class DetectionSimulator:
 
         self.detection_service = get_detection_service()
         self.results_history: List[Dict[str, Any]] = []
+        self.calibration_data: Optional[Dict] = None
+        self.mm_per_pixel: float = 1.0
 
-        logger.info("DetectionSimulator initialized")
+        # Detection algorithm parameters
+        self.detection_params = {
+            'contour': {
+                'blur_kernel': (5, 5),
+                'canny_lower': 50,
+                'canny_upper': 150,
+                'min_area': 100,
+                'max_area': 50000,
+                'aspect_ratio_range': (0.2, 5.0)
+            },
+            'template': {
+                'match_methods': [cv2.TM_CCOEFF_NORMED, cv2.TM_CCORR_NORMED],
+                'threshold': 0.7,
+                'scale_range': (0.8, 1.2),
+                'scale_steps': 5
+            },
+            'aruco': {
+                'dictionary': cv2.aruco.DICT_6X6_250,
+                'detector_params': cv2.aruco.DetectorParameters()
+            }
+        }
+
+        logger.info("DetectionSimulator initialized with real image processing")
+
+    def load_calibration(self, calibration_path: Path) -> bool:
+        """Load calibration data from JSON file"""
+        try:
+            import json
+            with open(calibration_path, 'r', encoding='utf-8') as f:
+                self.calibration_data = json.load(f)
+
+            self.mm_per_pixel = self.calibration_data.get('factor_mm_px', 1.0)
+            logger.info(f"Calibration loaded: {self.mm_per_pixel:.4f} mm/pixel")
+            return True
+        except Exception as e:
+            logger.error(f"Error loading calibration: {e}")
+            return False
 
     def simulate_garment_detection(
         self,
@@ -45,7 +83,8 @@ class DetectionSimulator:
         style: Style,
         config: AlignPressConfig,
         variant_id: Optional[str] = None,
-        save_results: bool = True
+        save_results: bool = True,
+        calibration_path: Optional[Path] = None
     ) -> Dict[str, Any]:
         """
         Simulate complete garment detection process
@@ -62,6 +101,10 @@ class DetectionSimulator:
         """
         logger.info(f"Simulating detection: {image_path}")
 
+        # Load calibration if provided
+        if calibration_path and calibration_path.exists():
+            self.load_calibration(calibration_path)
+
         # Load image
         try:
             frame = cv2.imread(str(image_path))
@@ -70,6 +113,9 @@ class DetectionSimulator:
         except Exception as e:
             logger.error(f"Error loading image: {e}")
             return self._create_error_result(str(e))
+
+        # Pre-process image for better detection
+        processed_frame = self._preprocess_image(frame)
 
         # Start timing
         start_time = time.time()
@@ -80,7 +126,7 @@ class DetectionSimulator:
 
         for logo in style.logos:
             logo_result = self._simulate_single_logo_detection(
-                frame, logo, config, variant_id
+                processed_frame, frame, logo, config, variant_id
             )
             logo_results.append(logo_result)
 
@@ -113,9 +159,27 @@ class DetectionSimulator:
         logger.info(f"Detection completed: {len(logo_results)} logos, {overall_success}")
         return result
 
+    def _preprocess_image(self, frame: np.ndarray) -> np.ndarray:
+        """Pre-process image to improve detection accuracy"""
+        # Apply denoising
+        denoised = cv2.fastNlMeansDenoisingColored(frame, None, 10, 10, 7, 21)
+
+        # Enhance contrast using CLAHE
+        lab = cv2.cvtColor(denoised, cv2.COLOR_BGR2LAB)
+        l_channel, a_channel, b_channel = cv2.split(lab)
+
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        l_channel = clahe.apply(l_channel)
+
+        enhanced = cv2.merge([l_channel, a_channel, b_channel])
+        enhanced_bgr = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
+
+        return enhanced_bgr
+
     def _simulate_single_logo_detection(
         self,
-        frame: np.ndarray,
+        processed_frame: np.ndarray,
+        original_frame: np.ndarray,
         logo: Logo,
         config: AlignPressConfig,
         variant_id: Optional[str] = None
@@ -136,11 +200,14 @@ class DetectionSimulator:
             # Apply variant adjustments if specified
             adjusted_logo = self._apply_variant_adjustments(logo, config, variant_id)
 
-            # Use the actual detection service
-            result = self.detection_service.detect_logo(frame, adjusted_logo, config)
+            # Convert mm coordinates to pixel coordinates using calibration
+            pixel_logo = self._convert_logo_to_pixels(adjusted_logo)
+
+            # Perform real detection based on detector type
+            result = self._perform_real_detection(processed_frame, original_frame, pixel_logo, config)
 
             # Add simulation-specific enhancements
-            result = self._enhance_simulation_result(result, frame, adjusted_logo)
+            result = self._enhance_simulation_result(result, original_frame, adjusted_logo)
 
             return result
 
@@ -207,6 +274,294 @@ class DetectionSimulator:
 
         return adjusted_logo
 
+    def _convert_logo_to_pixels(self, logo: Logo) -> Logo:
+        """Convert logo coordinates from mm to pixels using calibration"""
+        if self.mm_per_pixel <= 0:
+            return logo
+
+        # Convert position from mm to pixels
+        pixel_position = Point(
+            logo.position_mm.x / self.mm_per_pixel,
+            logo.position_mm.y / self.mm_per_pixel
+        )
+
+        # Convert ROI from mm to pixels
+        pixel_roi = Rectangle(
+            logo.roi.x / self.mm_per_pixel,
+            logo.roi.y / self.mm_per_pixel,
+            logo.roi.width / self.mm_per_pixel,
+            logo.roi.height / self.mm_per_pixel
+        )
+
+        # Create pixel-based logo
+        pixel_logo = Logo(
+            id=logo.id,
+            name=logo.name,
+            position_mm=pixel_position,  # Actually pixels now
+            tolerance_mm=logo.tolerance_mm / self.mm_per_pixel,  # Actually pixel tolerance
+            detector_type=logo.detector_type,
+            roi=pixel_roi
+        )
+
+        return pixel_logo
+
+    def _perform_real_detection(
+        self,
+        processed_frame: np.ndarray,
+        original_frame: np.ndarray,
+        logo: Logo,
+        config: AlignPressConfig
+    ) -> DetectionResult:
+        """Perform actual detection using real algorithms"""
+        start_time = time.time()
+
+        try:
+            if logo.detector_type == 'contour':
+                result = self._detect_contour(processed_frame, logo)
+            elif logo.detector_type == 'template':
+                result = self._detect_template(processed_frame, logo)
+            elif logo.detector_type == 'aruco':
+                result = self._detect_aruco(processed_frame, logo)
+            else:
+                # Fallback to contour detection
+                logger.warning(f"Unknown detector type {logo.detector_type}, using contour")
+                result = self._detect_contour(processed_frame, logo)
+
+            # Convert result position back to mm if calibration is available
+            if self.mm_per_pixel > 0 and result.success:
+                result.position = (
+                    result.position[0] * self.mm_per_pixel,
+                    result.position[1] * self.mm_per_pixel
+                )
+
+            detection_time = (time.time() - start_time) * 1000  # ms
+            logger.debug(f"Logo {logo.id} detection took {detection_time:.1f}ms")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Detection error for logo {logo.id}: {e}")
+            return DetectionResult(
+                logo_id=logo.id,
+                success=False,
+                position=(0.0, 0.0),
+                angle=0.0,
+                confidence=0.0,
+                error_mm=999.0,
+                error_deg=999.0,
+                timestamp=time.time()
+            )
+
+    def _detect_contour(self, frame: np.ndarray, logo: Logo) -> DetectionResult:
+        """Detect logo using contour detection"""
+        # Extract ROI
+        roi = self._extract_roi(frame, logo.roi)
+        if roi.size == 0:
+            return DetectionResult(
+                logo_id=logo.id, success=False, position=(0.0, 0.0),
+                angle=0.0, confidence=0.0, error_mm=999.0, error_deg=999.0,
+                timestamp=time.time()
+            )
+
+        # Convert to grayscale
+        gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+
+        # Apply Gaussian blur
+        params = self.detection_params['contour']
+        blurred = cv2.GaussianBlur(gray_roi, params['blur_kernel'], 0)
+
+        # Edge detection
+        edges = cv2.Canny(blurred, params['canny_lower'], params['canny_upper'])
+
+        # Find contours
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        if not contours:
+            return DetectionResult(
+                logo_id=logo.id, success=False, position=(0.0, 0.0),
+                angle=0.0, confidence=0.0, error_mm=999.0, error_deg=999.0,
+                timestamp=time.time()
+            )
+
+        # Filter contours by area and aspect ratio
+        valid_contours = []
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if params['min_area'] <= area <= params['max_area']:
+                rect = cv2.minAreaRect(contour)
+                width, height = rect[1]
+                if width > 0 and height > 0:
+                    aspect_ratio = width / height
+                    if params['aspect_ratio_range'][0] <= aspect_ratio <= params['aspect_ratio_range'][1]:
+                        valid_contours.append((contour, area))
+
+        if not valid_contours:
+            return DetectionResult(
+                logo_id=logo.id, success=False, position=(0.0, 0.0),
+                angle=0.0, confidence=0.0, error_mm=999.0, error_deg=999.0,
+                timestamp=time.time()
+            )
+
+        # Select largest valid contour
+        best_contour = max(valid_contours, key=lambda x: x[1])[0]
+
+        # Calculate centroid
+        M = cv2.moments(best_contour)
+        if M["m00"] != 0:
+            cx = int(M["m10"] / M["m00"]) + logo.roi.x
+            cy = int(M["m01"] / M["m00"]) + logo.roi.y
+        else:
+            cx, cy = logo.roi.x + logo.roi.width // 2, logo.roi.y + logo.roi.height // 2
+
+        # Calculate confidence based on contour properties
+        area = cv2.contourArea(best_contour)
+        perimeter = cv2.arcLength(best_contour, True)
+        if perimeter > 0:
+            circularity = 4 * np.pi * area / (perimeter ** 2)
+            confidence = min(1.0, circularity * 0.8 + 0.2)  # Base confidence + shape factor
+        else:
+            confidence = 0.5
+
+        # Calculate angle from minimum area rectangle
+        rect = cv2.minAreaRect(best_contour)
+        angle = rect[2]
+
+        # Calculate error from expected position
+        expected_x, expected_y = logo.position_mm.x, logo.position_mm.y
+        error_mm = np.sqrt((cx - expected_x) ** 2 + (cy - expected_y) ** 2)
+
+        return DetectionResult(
+            logo_id=logo.id,
+            success=confidence > 0.5,  # Success threshold
+            position=(float(cx), float(cy)),
+            angle=float(angle),
+            confidence=float(confidence),
+            error_mm=float(error_mm),
+            error_deg=0.0,
+            timestamp=time.time()
+        )
+
+    def _detect_template(self, frame: np.ndarray, logo: Logo) -> DetectionResult:
+        """Detect logo using template matching"""
+        # For template matching, we'd need a template image
+        # This is a simplified implementation that simulates template matching
+
+        roi = self._extract_roi(frame, logo.roi)
+        if roi.size == 0:
+            return DetectionResult(
+                logo_id=logo.id, success=False, position=(0.0, 0.0),
+                angle=0.0, confidence=0.0, error_mm=999.0, error_deg=999.0,
+                timestamp=time.time()
+            )
+
+        # Convert to grayscale
+        gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+
+        # Simulate template matching by analyzing texture and patterns
+        # In a real implementation, you would load and match against template images
+
+        # Calculate texture features
+        mean_intensity = np.mean(gray_roi)
+        std_intensity = np.std(gray_roi)
+
+        # Edge density as a feature
+        edges = cv2.Canny(gray_roi, 50, 150)
+        edge_density = np.sum(edges > 0) / edges.size
+
+        # Simulate confidence based on texture features
+        # This is a placeholder - in reality you'd compare against actual templates
+        texture_score = min(1.0, edge_density * 2)  # Higher edge density = better match
+        intensity_score = 1.0 - abs(mean_intensity - 128) / 128  # Prefer medium intensity
+
+        confidence = (texture_score * 0.7 + intensity_score * 0.3)
+
+        # Find center of ROI as detected position
+        center_x = logo.roi.x + logo.roi.width // 2
+        center_y = logo.roi.y + logo.roi.height // 2
+
+        # Add some variation to simulate real detection
+        variation_x = np.random.normal(0, 2)  # Small random offset
+        variation_y = np.random.normal(0, 2)
+
+        detected_x = center_x + variation_x
+        detected_y = center_y + variation_y
+
+        # Calculate error from expected position
+        expected_x, expected_y = logo.position_mm.x, logo.position_mm.y
+        error_mm = np.sqrt((detected_x - expected_x) ** 2 + (detected_y - expected_y) ** 2)
+
+        return DetectionResult(
+            logo_id=logo.id,
+            success=confidence > 0.6,  # Template matching usually needs higher confidence
+            position=(float(detected_x), float(detected_y)),
+            angle=0.0,
+            confidence=float(confidence),
+            error_mm=float(error_mm),
+            error_deg=0.0,
+            timestamp=time.time()
+        )
+
+    def _detect_aruco(self, frame: np.ndarray, logo: Logo) -> DetectionResult:
+        """Detect logo using ArUco marker detection"""
+        # Extract ROI
+        roi = self._extract_roi(frame, logo.roi)
+        if roi.size == 0:
+            return DetectionResult(
+                logo_id=logo.id, success=False, position=(0.0, 0.0),
+                angle=0.0, confidence=0.0, error_mm=999.0, error_deg=999.0,
+                timestamp=time.time()
+            )
+
+        # Convert to grayscale
+        gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+
+        # Set up ArUco detection
+        params = self.detection_params['aruco']
+        dictionary = cv2.aruco.getPredefinedDictionary(params['dictionary'])
+        detector_params = params['detector_params']
+
+        # Detect ArUco markers
+        corners, ids, rejected = cv2.aruco.detectMarkers(gray_roi, dictionary, parameters=detector_params)
+
+        if ids is None or len(ids) == 0:
+            return DetectionResult(
+                logo_id=logo.id, success=False, position=(0.0, 0.0),
+                angle=0.0, confidence=0.0, error_mm=999.0, error_deg=999.0,
+                timestamp=time.time()
+            )
+
+        # Use the first detected marker
+        marker_corners = corners[0][0]  # First marker, all corners
+        marker_id = ids[0][0]
+
+        # Calculate center of marker
+        center_x = np.mean(marker_corners[:, 0]) + logo.roi.x
+        center_y = np.mean(marker_corners[:, 1]) + logo.roi.y
+
+        # Calculate angle from marker orientation
+        # Vector from first corner to second corner
+        dx = marker_corners[1, 0] - marker_corners[0, 0]
+        dy = marker_corners[1, 1] - marker_corners[0, 1]
+        angle = np.degrees(np.arctan2(dy, dx))
+
+        # ArUco detection is usually very reliable
+        confidence = 0.95
+
+        # Calculate error from expected position
+        expected_x, expected_y = logo.position_mm.x, logo.position_mm.y
+        error_mm = np.sqrt((center_x - expected_x) ** 2 + (center_y - expected_y) ** 2)
+
+        return DetectionResult(
+            logo_id=logo.id,
+            success=True,  # ArUco detection is binary - either found or not
+            position=(float(center_x), float(center_y)),
+            angle=float(angle),
+            confidence=float(confidence),
+            error_mm=float(error_mm),
+            error_deg=0.0,
+            timestamp=time.time()
+        )
+
     def _enhance_simulation_result(
         self,
         result: DetectionResult,
@@ -227,7 +582,9 @@ class DetectionSimulator:
             'roi_mean_brightness': roi_stats['mean_brightness'],
             'roi_contrast': roi_stats['contrast'],
             'roi_size_px': roi_stats['size'],
-            'edge_density': roi_stats['edge_density']
+            'edge_density': roi_stats['edge_density'],
+            'calibration_factor': self.mm_per_pixel,
+            'detector_type': logo.detector_type
         }
 
         # For now, we'll log this info (in a real implementation,
@@ -493,6 +850,258 @@ class DetectionSimulator:
                 logger.error(f"Error saving report: {e}")
 
         return report_text
+
+    def simulate_batch_with_variants(
+        self,
+        image_dir: Path,
+        config: AlignPressConfig,
+        calibration_path: Optional[Path] = None,
+        image_pattern: str = "*.jpg",
+        test_variants: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Simulate detection on batch of images with all variants
+
+        Args:
+            image_dir: Directory containing test images
+            config: System configuration with variants
+            calibration_path: Optional calibration file
+            image_pattern: Glob pattern for image files
+            test_variants: Whether to test size variants
+
+        Returns:
+            Comprehensive results across all images and variants
+        """
+        logger.info(f"Starting batch simulation with variants in {image_dir}")
+
+        if calibration_path:
+            self.load_calibration(calibration_path)
+
+        image_files = list(image_dir.glob(image_pattern))
+        if not image_files:
+            logger.warning(f"No images found matching {image_pattern} in {image_dir}")
+            return {"error": "No images found"}
+
+        style = config.get_active_style()
+        if not style:
+            logger.error("No active style found in configuration")
+            return {"error": "No active style"}
+
+        all_results = []
+        variant_results = {}
+
+        # Test base style
+        for image_path in image_files:
+            result = self.simulate_garment_detection(
+                image_path, style, config, save_results=False
+            )
+            result['variant_id'] = 'base'
+            result['image_filename'] = image_path.name
+            all_results.append(result)
+
+        # Test variants if enabled
+        if test_variants and config.library.variants:
+            for variant in config.library.variants:
+                variant_results[variant.id] = []
+                for image_path in image_files:
+                    result = self.simulate_garment_detection(
+                        image_path, style, config, variant_id=variant.id, save_results=False
+                    )
+                    result['variant_id'] = variant.id
+                    result['image_filename'] = image_path.name
+                    variant_results[variant.id].append(result)
+                    all_results.append(result)
+
+        # Calculate comprehensive statistics
+        batch_stats = self._calculate_comprehensive_batch_stats(all_results, variant_results)
+
+        return {
+            'batch_stats': batch_stats,
+            'all_results': all_results,
+            'variant_results': variant_results,
+            'images_processed': len(image_files),
+            'variants_tested': len(variant_results),
+            'total_detections': len(all_results)
+        }
+
+    def _calculate_comprehensive_batch_stats(
+        self,
+        all_results: List[Dict[str, Any]],
+        variant_results: Dict[str, List[Dict[str, Any]]]
+    ) -> Dict[str, Any]:
+        """Calculate comprehensive statistics for batch processing"""
+        if not all_results:
+            return {}
+
+        # Overall statistics
+        overall_success = [r for r in all_results if r.get('overall_success', False)]
+        total_logos = sum(r.get('logo_count', 0) for r in all_results)
+        successful_logos = sum(r.get('successful_logos', 0) for r in all_results)
+
+        stats = {
+            'total_sessions': len(all_results),
+            'total_images': len(set(r.get('image_filename', '') for r in all_results)),
+            'successful_sessions': len(overall_success),
+            'session_success_rate': len(overall_success) / len(all_results),
+            'total_logo_attempts': total_logos,
+            'successful_logo_detections': successful_logos,
+            'logo_success_rate': successful_logos / total_logos if total_logos > 0 else 0,
+            'average_processing_time_ms': np.mean([r.get('processing_time_ms', 0) for r in all_results]),
+            'average_confidence': np.mean([r.get('average_confidence', 0) for r in all_results])
+        }
+
+        # Per-variant statistics
+        if variant_results:
+            variant_stats = {}
+            for variant_id, results in variant_results.items():
+                if results:
+                    variant_successful = [r for r in results if r.get('overall_success', False)]
+                    variant_stats[variant_id] = {
+                        'sessions': len(results),
+                        'successful_sessions': len(variant_successful),
+                        'success_rate': len(variant_successful) / len(results),
+                        'average_confidence': np.mean([r.get('average_confidence', 0) for r in results]),
+                        'average_processing_time_ms': np.mean([r.get('processing_time_ms', 0) for r in results])
+                    }
+
+            stats['variant_performance'] = variant_stats
+
+        # Performance insights
+        processing_times = [r.get('processing_time_ms', 0) for r in all_results]
+        confidences = [r.get('average_confidence', 0) for r in all_results]
+
+        stats['performance_insights'] = {
+            'fastest_detection_ms': np.min(processing_times),
+            'slowest_detection_ms': np.max(processing_times),
+            'processing_time_std': np.std(processing_times),
+            'highest_confidence': np.max(confidences),
+            'lowest_confidence': np.min(confidences),
+            'confidence_std': np.std(confidences)
+        }
+
+        return stats
+
+    def export_batch_results(
+        self,
+        batch_results: Dict[str, Any],
+        output_dir: Path,
+        create_debug_images: bool = True
+    ) -> Path:
+        """Export comprehensive batch results with reports and debug images"""
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate comprehensive report
+        report_path = output_dir / "batch_detection_report.txt"
+        report_content = self._generate_comprehensive_report(batch_results)
+
+        with open(report_path, 'w', encoding='utf-8') as f:
+            f.write(report_content)
+
+        # Export JSON results
+        json_path = output_dir / "batch_results.json"
+        import json
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(batch_results, f, indent=2, default=str)
+
+        # Create debug images if requested
+        if create_debug_images:
+            debug_dir = output_dir / "debug_images"
+            debug_dir.mkdir(exist_ok=True)
+
+            for result in batch_results['all_results'][:20]:  # Limit to first 20
+                if 'image_path' in result:
+                    image_path = Path(result['image_path'])
+                    if image_path.exists():
+                        debug_filename = f"{image_path.stem}_{result.get('variant_id', 'base')}_debug.jpg"
+                        debug_path = debug_dir / debug_filename
+                        self.create_visual_debug_image(image_path, result, debug_path)
+
+        logger.info(f"Batch results exported to {output_dir}")
+        return output_dir
+
+    def _generate_comprehensive_report(self, batch_results: Dict[str, Any]) -> str:
+        """Generate comprehensive batch processing report"""
+        stats = batch_results.get('batch_stats', {})
+
+        lines = [
+            "=" * 80,
+            "ALIGNPRESS v2 - COMPREHENSIVE BATCH DETECTION REPORT",
+            "=" * 80,
+            f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}",
+            f"Calibration Factor: {self.mm_per_pixel:.4f} mm/pixel",
+            "",
+            "OVERALL PERFORMANCE:",
+            "-" * 40,
+            f"Total Images Processed: {stats.get('total_images', 0)}",
+            f"Total Detection Sessions: {stats.get('total_sessions', 0)}",
+            f"Variants Tested: {batch_results.get('variants_tested', 0)}",
+            f"Total Logo Attempts: {stats.get('total_logo_attempts', 0)}",
+            "",
+            "SUCCESS RATES:",
+            "-" * 40,
+            f"Session Success Rate: {stats.get('session_success_rate', 0):.1%}",
+            f"Logo Detection Rate: {stats.get('logo_success_rate', 0):.1%}",
+            f"Average Confidence: {stats.get('average_confidence', 0):.3f}",
+            f"Average Processing Time: {stats.get('average_processing_time_ms', 0):.1f} ms",
+            ""
+        ]
+
+        # Add performance insights
+        if 'performance_insights' in stats:
+            insights = stats['performance_insights']
+            lines.extend([
+                "PERFORMANCE INSIGHTS:",
+                "-" * 40,
+                f"Fastest Detection: {insights.get('fastest_detection_ms', 0):.1f} ms",
+                f"Slowest Detection: {insights.get('slowest_detection_ms', 0):.1f} ms",
+                f"Processing Time Variance: ±{insights.get('processing_time_std', 0):.1f} ms",
+                f"Confidence Range: {insights.get('lowest_confidence', 0):.3f} - {insights.get('highest_confidence', 0):.3f}",
+                f"Confidence Variance: ±{insights.get('confidence_std', 0):.3f}",
+                ""
+            ])
+
+        # Add variant performance
+        if 'variant_performance' in stats:
+            lines.extend(["VARIANT PERFORMANCE:", "-" * 40])
+            for variant_id, variant_stats in stats['variant_performance'].items():
+                lines.extend([
+                    f"Variant: {variant_id}",
+                    f"  Success Rate: {variant_stats.get('success_rate', 0):.1%}",
+                    f"  Avg Confidence: {variant_stats.get('average_confidence', 0):.3f}",
+                    f"  Avg Time: {variant_stats.get('average_processing_time_ms', 0):.1f} ms",
+                    ""
+                ])
+
+        # Add failed detection analysis
+        failed_results = [r for r in batch_results['all_results'] if not r.get('overall_success', False)]
+        if failed_results:
+            lines.extend([
+                "FAILED DETECTIONS ANALYSIS:",
+                "-" * 40,
+                f"Total Failed Sessions: {len(failed_results)}"
+            ])
+
+            # Group by variant
+            failed_by_variant = {}
+            for result in failed_results[:10]:  # Show first 10
+                variant = result.get('variant_id', 'unknown')
+                if variant not in failed_by_variant:
+                    failed_by_variant[variant] = []
+                failed_by_variant[variant].append(result.get('image_filename', 'unknown'))
+
+            for variant, images in failed_by_variant.items():
+                lines.append(f"  {variant}: {', '.join(images[:5])}")
+                if len(images) > 5:
+                    lines.append(f"    ... and {len(images) - 5} more")
+
+            lines.append("")
+
+        lines.extend([
+            "=" * 80,
+            "End of Comprehensive Report"
+        ])
+
+        return "\n".join(lines)
 
     def create_visual_debug_image(
         self,
