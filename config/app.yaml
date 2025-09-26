@@ -1,31 +1,7 @@
-schema_version: 3
+version: '3'
 language: es
-preset_path: presets/example_tshirt.json
-calibration_path: calibrations/chessboard_7x5_25mm.json
-dataset:
-  path: ../datasets/sample_images
-  fps: 30.0
-  loop: false
-logging:
-  output_dir: ../logs
-  formats:
-  - csv
-  - json
-ui:
-  theme: light
-  operator_fullscreen: false
-  kiosk_mode: false
-  technical_pin: '2468'
-  onboarding_completed: true
-  camera_layout: single
-assets:
-  platens_dir: ../platens
-  styles_dir: ../styles
-  variants_dir: ../variants
-  job_cards_dir: ../logs/job_cards
-selection:
-  platen_path: ../platens/default_platen.json
-  style_path: ../styles/example_style.json
-  variant_path: ../variants/example_variant.json
-calibration_reminder_days: 7
-calibration_expire_days: 30
+units: mm
+theme: light
+active_platen_id: default_platen
+active_style_id: example_style
+active_variant_id: example_variant

@@ -1,0 +1,141 @@
+2025-09-25 22:44:10,827 - alignpress_v2.ui.app - INFO - ==================================================
+2025-09-25 22:44:10,827 - alignpress_v2.ui.app - INFO - AlignPress v2 - Visual Logo Detection System
+2025-09-25 22:44:10,827 - alignpress_v2.ui.app - INFO - ==================================================
+2025-09-25 22:44:10,827 - alignpress_v2.ui.app - INFO - AlignPressApp initialized
+2025-09-25 22:44:10,827 - alignpress_v2.ui.app - INFO - Creating application controller...
+2025-09-25 22:44:10,827 - alignpress_v2.controller.app_controller - INFO - Initializing AppController
+2025-09-25 22:44:10,827 - alignpress_v2.config.config_manager - INFO - Loaded config version 2.0.0
+2025-09-25 22:44:10,827 - alignpress_v2.controller.state_manager - INFO - StateManager initialized
+2025-09-25 22:44:10,828 - alignpress_v2.controller.app_controller - INFO - AppController initialized successfully
+2025-09-25 22:44:10,828 - alignpress_v2.ui.app - INFO - Creating main window...
+2025-09-25 22:44:10,828 - alignpress_v2.ui.main_window - INFO - Using CustomTkinter for modern UI
+2025-09-25 22:44:10,935 - alignpress_v2.ui.components.viewport - INFO - CameraViewport initialized (800x600)
+2025-09-25 22:44:10,980 - alignpress_v2.ui.components.control_panel - INFO - ControlPanel initialized
+2025-09-25 22:44:10,982 - alignpress_v2.ui.main_window - INFO - MainWindow initialized
+2025-09-25 22:44:10,982 - alignpress_v2.ui.app - INFO - Application initialization complete
+2025-09-25 22:44:10,982 - alignpress_v2.ui.app - INFO - Starting AlignPress v2 UI...
+2025-09-25 22:44:10,982 - alignpress_v2.ui.main_window - INFO - Starting UI event loop
+2025-09-25 22:46:03,564 - alignpress_v2.ui.main_window - INFO - Camera calibration requested
+2025-09-25 22:46:07,972 - alignpress_v2.ui.main_window - INFO - Configuration requested
+2025-09-25 22:46:11,546 - alignpress_v2.ui.main_window - INFO - Reset metrics requested
+2025-09-25 22:46:13,313 - alignpress_v2.ui.main_window - INFO - Application closing...
+2025-09-25 22:46:13,313 - alignpress_v2.controller.app_controller - INFO - Shutting down AlignPress v2
+2025-09-25 22:46:13,314 - alignpress_v2.config.config_manager - INFO - Saved config to config/alignpress_v2.json
+2025-09-25 22:46:13,314 - alignpress_v2.controller.app_controller - INFO - AlignPress v2 shutdown completed
+2025-09-25 22:46:13,319 - alignpress_v2.ui.app - INFO - Shutting down AlignPress v2...
+2025-09-25 22:46:13,319 - alignpress_v2.controller.app_controller - INFO - Shutting down AlignPress v2
+2025-09-25 22:46:13,319 - alignpress_v2.config.config_manager - INFO - Saved config to config/alignpress_v2.json
+2025-09-25 22:46:13,319 - alignpress_v2.controller.app_controller - INFO - AlignPress v2 shutdown completed
+2025-09-25 22:46:13,319 - alignpress_v2.ui.app - INFO - Application shutdown complete
+2025-09-25 22:51:21,237 - alignpress_v2.ui.app - INFO - ==================================================
+2025-09-25 22:51:21,237 - alignpress_v2.ui.app - INFO - AlignPress v2 - Visual Logo Detection System
+2025-09-25 22:51:21,237 - alignpress_v2.ui.app - INFO - ==================================================
+2025-09-25 22:51:21,237 - alignpress_v2.ui.app - INFO - AlignPressApp initialized
+2025-09-25 22:51:21,237 - alignpress_v2.ui.app - INFO - Creating application controller...
+2025-09-25 22:51:21,237 - alignpress_v2.controller.app_controller - INFO - Initializing AppController
+2025-09-25 22:51:21,237 - alignpress_v2.config.config_manager - INFO - Loaded config version 2.0.0
+2025-09-25 22:51:21,237 - alignpress_v2.controller.state_manager - INFO - StateManager initialized
+2025-09-25 22:51:21,238 - alignpress_v2.controller.app_controller - INFO - AppController initialized successfully
+2025-09-25 22:51:21,238 - alignpress_v2.ui.app - INFO - Creating main window...
+2025-09-25 22:51:21,238 - alignpress_v2.ui.main_window - INFO - Using CustomTkinter for modern UI
+2025-09-25 22:51:21,337 - alignpress_v2.ui.components.viewport - INFO - CameraViewport initialized (800x600)
+2025-09-25 22:51:21,379 - alignpress_v2.ui.components.control_panel - INFO - ControlPanel initialized
+2025-09-25 22:51:21,381 - alignpress_v2.ui.main_window - INFO - MainWindow initialized
+2025-09-25 22:51:21,381 - alignpress_v2.ui.app - INFO - Application initialization complete
+2025-09-25 22:51:21,381 - alignpress_v2.ui.app - INFO - Starting AlignPress v2 UI...
+2025-09-25 22:51:21,381 - alignpress_v2.ui.main_window - INFO - Starting UI event loop
+2025-09-25 22:51:49,141 - alignpress_v2.ui.main_window - INFO - Configuration requested
+2025-09-25 22:51:53,940 - alignpress_v2.ui.main_window - INFO - Camera calibration requested
+2025-09-25 22:51:59,657 - alignpress_v2.ui.main_window - INFO - Camera calibration requested
+2025-09-25 22:52:04,463 - alignpress_v2.ui.main_window - INFO - Reset metrics requested
+2025-09-25 22:52:06,135 - alignpress_v2.ui.main_window - INFO - Configuration requested
+2025-09-25 22:52:17,889 - alignpress_v2.ui.main_window - INFO - Application closing...
+2025-09-25 22:52:17,890 - alignpress_v2.controller.app_controller - INFO - Shutting down AlignPress v2
+2025-09-25 22:52:17,890 - alignpress_v2.config.config_manager - INFO - Saved config to config/alignpress_v2.json
+2025-09-25 22:52:17,890 - alignpress_v2.controller.app_controller - INFO - AlignPress v2 shutdown completed
+2025-09-25 22:52:17,896 - alignpress_v2.ui.app - INFO - Shutting down AlignPress v2...
+2025-09-25 22:52:17,896 - alignpress_v2.controller.app_controller - INFO - Shutting down AlignPress v2
+2025-09-25 22:52:17,897 - alignpress_v2.config.config_manager - INFO - Saved config to config/alignpress_v2.json
+2025-09-25 22:52:17,897 - alignpress_v2.controller.app_controller - INFO - AlignPress v2 shutdown completed
+2025-09-25 22:52:17,897 - alignpress_v2.ui.app - INFO - Application shutdown complete
+2025-09-25 22:55:36,154 - alignpress_v2.ui.app - INFO - ==================================================
+2025-09-25 22:55:36,154 - alignpress_v2.ui.app - INFO - AlignPress v2 - Visual Logo Detection System
+2025-09-25 22:55:36,154 - alignpress_v2.ui.app - INFO - ==================================================
+2025-09-25 22:55:36,154 - alignpress_v2.ui.app - INFO - AlignPressApp initialized
+2025-09-25 22:55:36,154 - alignpress_v2.ui.app - INFO - Creating application controller...
+2025-09-25 22:55:36,154 - alignpress_v2.controller.app_controller - INFO - Initializing AppController
+2025-09-25 22:55:36,154 - alignpress_v2.config.config_manager - INFO - Loaded config version 2.0.0
+2025-09-25 22:55:36,154 - alignpress_v2.controller.state_manager - INFO - StateManager initialized
+2025-09-25 22:55:36,154 - alignpress_v2.controller.app_controller - INFO - AppController initialized successfully
+2025-09-25 22:55:36,154 - alignpress_v2.ui.app - INFO - Creating main window...
+2025-09-25 22:55:36,154 - alignpress_v2.ui.main_window - INFO - Using CustomTkinter for modern UI
+2025-09-25 22:55:36,199 - alignpress_v2.ui.components.viewport - INFO - CameraViewport initialized (800x600)
+2025-09-25 22:55:36,240 - alignpress_v2.ui.components.control_panel - INFO - ControlPanel initialized
+2025-09-25 22:55:36,242 - alignpress_v2.ui.main_window - INFO - MainWindow initialized
+2025-09-25 22:55:36,242 - alignpress_v2.ui.app - INFO - Application initialization complete
+2025-09-25 22:55:36,242 - alignpress_v2.ui.app - INFO - Starting AlignPress v2 UI...
+2025-09-25 22:55:36,242 - alignpress_v2.ui.main_window - INFO - Starting UI event loop
+2025-09-25 22:55:40,694 - alignpress_v2.ui.main_window - INFO - Camera calibration requested
+2025-09-25 22:55:43,238 - alignpress_v2.ui.main_window - INFO - Configuration requested
+2025-09-25 22:55:43,197 - alignpress_v2.ui.main_window - INFO - Reset metrics requested
+2025-09-25 22:55:46,691 - alignpress_v2.ui.main_window - INFO - Application closing...
+2025-09-25 22:55:46,692 - alignpress_v2.controller.app_controller - INFO - Shutting down AlignPress v2
+2025-09-25 22:55:46,692 - alignpress_v2.config.config_manager - INFO - Saved config to config/alignpress_v2.json
+2025-09-25 22:55:46,692 - alignpress_v2.controller.app_controller - INFO - AlignPress v2 shutdown completed
+2025-09-25 22:55:46,698 - alignpress_v2.ui.app - INFO - Shutting down AlignPress v2...
+2025-09-25 22:55:46,698 - alignpress_v2.controller.app_controller - INFO - Shutting down AlignPress v2
+2025-09-25 22:55:46,698 - alignpress_v2.config.config_manager - INFO - Saved config to config/alignpress_v2.json
+2025-09-25 22:55:46,698 - alignpress_v2.controller.app_controller - INFO - AlignPress v2 shutdown completed
+2025-09-25 22:55:46,698 - alignpress_v2.ui.app - INFO - Application shutdown complete
+2025-09-25 22:56:24,824 - alignpress_v2.ui.app - INFO - ==================================================
+2025-09-25 22:56:24,824 - alignpress_v2.ui.app - INFO - AlignPress v2 - Visual Logo Detection System
+2025-09-25 22:56:24,824 - alignpress_v2.ui.app - INFO - ==================================================
+2025-09-25 22:56:24,824 - alignpress_v2.ui.app - INFO - AlignPressApp initialized
+2025-09-25 22:56:24,824 - alignpress_v2.ui.app - INFO - Creating application controller...
+2025-09-25 22:56:24,824 - alignpress_v2.controller.app_controller - INFO - Initializing AppController
+2025-09-25 22:56:24,824 - alignpress_v2.config.config_manager - INFO - Loaded config version 2.0.0
+2025-09-25 22:56:24,824 - alignpress_v2.controller.state_manager - INFO - StateManager initialized
+2025-09-25 22:56:24,824 - alignpress_v2.controller.app_controller - INFO - AppController initialized successfully
+2025-09-25 22:56:24,824 - alignpress_v2.ui.app - INFO - Creating main window...
+2025-09-25 22:56:24,824 - alignpress_v2.ui.main_window - INFO - Using CustomTkinter for modern UI
+2025-09-25 22:56:24,864 - alignpress_v2.ui.components.viewport - INFO - CameraViewport initialized (800x600)
+2025-09-25 22:56:24,905 - alignpress_v2.ui.components.control_panel - INFO - ControlPanel initialized
+2025-09-25 22:56:24,908 - alignpress_v2.ui.main_window - INFO - MainWindow initialized
+2025-09-25 22:56:24,908 - alignpress_v2.ui.app - INFO - Application initialization complete
+2025-09-25 22:56:24,908 - alignpress_v2.ui.app - INFO - Starting AlignPress v2 UI...
+2025-09-25 22:56:24,908 - alignpress_v2.ui.main_window - INFO - Starting UI event loop
+2025-09-25 22:56:38,599 - alignpress_v2.ui.main_window - INFO - Application closing...
+2025-09-25 22:56:38,599 - alignpress_v2.controller.app_controller - INFO - Shutting down AlignPress v2
+2025-09-25 22:56:38,600 - alignpress_v2.config.config_manager - INFO - Saved config to config/alignpress_v2.json
+2025-09-25 22:56:38,600 - alignpress_v2.controller.app_controller - INFO - AlignPress v2 shutdown completed
+2025-09-25 22:56:38,605 - alignpress_v2.ui.app - INFO - Shutting down AlignPress v2...
+2025-09-25 22:56:38,605 - alignpress_v2.controller.app_controller - INFO - Shutting down AlignPress v2
+2025-09-25 22:56:38,605 - alignpress_v2.config.config_manager - INFO - Saved config to config/alignpress_v2.json
+2025-09-25 22:56:38,605 - alignpress_v2.controller.app_controller - INFO - AlignPress v2 shutdown completed
+2025-09-25 22:56:38,605 - alignpress_v2.ui.app - INFO - Application shutdown complete
+2025-09-25 23:22:51,257 - alignpress_v2.ui.app - INFO - ==================================================
+2025-09-25 23:22:51,258 - alignpress_v2.ui.app - INFO - AlignPress v2 - Visual Logo Detection System
+2025-09-25 23:22:51,258 - alignpress_v2.ui.app - INFO - ==================================================
+2025-09-25 23:22:51,258 - alignpress_v2.ui.app - INFO - AlignPressApp initialized
+2025-09-25 23:22:51,258 - alignpress_v2.ui.app - INFO - Creating application controller...
+2025-09-25 23:22:51,258 - alignpress_v2.controller.app_controller - INFO - Initializing AppController
+2025-09-25 23:22:51,258 - alignpress_v2.config.config_manager - INFO - Loaded config version 2.0.0
+2025-09-25 23:22:51,258 - alignpress_v2.controller.state_manager - INFO - StateManager initialized
+2025-09-25 23:22:51,258 - alignpress_v2.controller.app_controller - INFO - AppController initialized successfully
+2025-09-25 23:22:51,258 - alignpress_v2.ui.app - INFO - Creating main window...
+2025-09-25 23:22:51,259 - alignpress_v2.ui.main_window - INFO - Using CustomTkinter for modern UI
+2025-09-25 23:22:51,283 - alignpress_v2.ui.components.viewport - INFO - CameraViewport initialized (800x600)
+2025-09-25 23:22:51,323 - alignpress_v2.ui.components.control_panel - INFO - ControlPanel initialized
+2025-09-25 23:22:51,324 - alignpress_v2.ui.main_window - INFO - MainWindow initialized
+2025-09-25 23:22:51,325 - alignpress_v2.ui.app - INFO - Application initialization complete
+2025-09-25 23:22:51,325 - alignpress_v2.ui.app - INFO - Starting AlignPress v2 UI...
+2025-09-25 23:22:51,325 - alignpress_v2.ui.main_window - INFO - Starting UI event loop
+2025-09-25 23:22:56,112 - alignpress_v2.ui.main_window - INFO - Application closing...
+2025-09-25 23:22:56,112 - alignpress_v2.controller.app_controller - INFO - Shutting down AlignPress v2
+2025-09-25 23:22:56,113 - alignpress_v2.config.config_manager - INFO - Saved config to config/alignpress_v2.json
+2025-09-25 23:22:56,113 - alignpress_v2.controller.app_controller - INFO - AlignPress v2 shutdown completed
+2025-09-25 23:22:56,118 - alignpress_v2.ui.app - INFO - Shutting down AlignPress v2...
+2025-09-25 23:22:56,118 - alignpress_v2.controller.app_controller - INFO - Shutting down AlignPress v2
+2025-09-25 23:22:56,118 - alignpress_v2.config.config_manager - INFO - Saved config to config/alignpress_v2.json
+2025-09-25 23:22:56,118 - alignpress_v2.controller.app_controller - INFO - AlignPress v2 shutdown completed
+2025-09-25 23:22:56,118 - alignpress_v2.ui.app - INFO - Application shutdown complete

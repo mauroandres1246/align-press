@@ -1,0 +1,232 @@
+{
+  "version": "2.0.0",
+  "system": {
+    "language": "es",
+    "units": "mm",
+    "theme": "light"
+  },
+  "calibration": {
+    "factor_mm_px": 0.2645,
+    "timestamp": "2025-09-25T23:22:17.237043",
+    "method": "chessboard_auto",
+    "pattern_type": "chessboard",
+    "pattern_size": [
+      7,
+      7
+    ]
+  },
+  "hardware": {
+    "camera": {
+      "device_id": 0,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "fps": 30
+    },
+    "gpio": {
+      "enabled": true,
+      "led_pin": 18,
+      "button_pin": 19
+    },
+    "arduino": {
+      "enabled": false,
+      "port": "",
+      "baudrate": 9600
+    }
+  },
+  "library": {
+    "platens": [],
+    "styles": [
+      {
+        "id": "comunicaciones_2024",
+        "name": "Camisola Comunicaciones Temporada 2024",
+        "logos": [
+          {
+            "id": "escudo_comunicaciones",
+            "name": "Escudo Comunicaciones F.C.",
+            "position_mm": {
+              "x": 100.0,
+              "y": 80.0
+            },
+            "tolerance_mm": 3.0,
+            "detector_type": "contour",
+            "roi": {
+              "x": 70,
+              "y": 50,
+              "width": 60,
+              "height": 60
+            },
+            "detector_params": {
+              "min_area": 800,
+              "max_area": 4000,
+              "threshold_type": "adaptive",
+              "contour_mode": "external"
+            },
+            "instructions": "Escudo principal del equipo - centro del pecho"
+          },
+          {
+            "id": "sponsor_movistar",
+            "name": "Logo Movistar",
+            "position_mm": {
+              "x": 50.0,
+              "y": 120.0
+            },
+            "tolerance_mm": 2.5,
+            "detector_type": "template",
+            "roi": {
+              "x": 30,
+              "y": 100,
+              "width": 40,
+              "height": 25
+            },
+            "detector_params": {
+              "template_path": "templates/movistar_logo.png",
+              "match_threshold": 0.75,
+              "method": "cv2.TM_CCOEFF_NORMED"
+            },
+            "instructions": "Sponsor principal - pecho izquierdo"
+          },
+          {
+            "id": "sponsor_adidas",
+            "name": "Logo Adidas",
+            "position_mm": {
+              "x": 150.0,
+              "y": 120.0
+            },
+            "tolerance_mm": 2.5,
+            "detector_type": "contour",
+            "roi": {
+              "x": 130,
+              "y": 100,
+              "width": 40,
+              "height": 25
+            },
+            "detector_params": {
+              "min_area": 300,
+              "max_area": 1500,
+              "aspect_ratio_min": 1.2,
+              "aspect_ratio_max": 2.5
+            },
+            "instructions": "Sponsor técnico - pecho derecho"
+          }
+        ]
+      }
+    ],
+    "variants": [
+      {
+        "id": "comunicaciones_2024_xs",
+        "style_id": "comunicaciones_2024",
+        "size": "XS",
+        "scale_factor": 0.8,
+        "offsets": {
+          "escudo_comunicaciones": {
+            "x": -12.0,
+            "y": -8.0
+          },
+          "sponsor_movistar": {
+            "x": -8.0,
+            "y": -5.0
+          },
+          "sponsor_adidas": {
+            "x": 8.0,
+            "y": -5.0
+          }
+        }
+      },
+      {
+        "id": "comunicaciones_2024_s",
+        "style_id": "comunicaciones_2024",
+        "size": "S",
+        "scale_factor": 0.9,
+        "offsets": {
+          "escudo_comunicaciones": {
+            "x": -8.0,
+            "y": -5.0
+          },
+          "sponsor_movistar": {
+            "x": -5.0,
+            "y": -3.0
+          },
+          "sponsor_adidas": {
+            "x": 5.0,
+            "y": -3.0
+          }
+        }
+      },
+      {
+        "id": "comunicaciones_2024_m",
+        "style_id": "comunicaciones_2024",
+        "size": "M",
+        "scale_factor": 1.0,
+        "offsets": {}
+      },
+      {
+        "id": "comunicaciones_2024_l",
+        "style_id": "comunicaciones_2024",
+        "size": "L",
+        "scale_factor": 1.1,
+        "offsets": {
+          "escudo_comunicaciones": {
+            "x": 5.0,
+            "y": 3.0
+          },
+          "sponsor_movistar": {
+            "x": 3.0,
+            "y": 2.0
+          },
+          "sponsor_adidas": {
+            "x": -3.0,
+            "y": 2.0
+          }
+        }
+      },
+      {
+        "id": "comunicaciones_2024_xl",
+        "style_id": "comunicaciones_2024",
+        "size": "XL",
+        "scale_factor": 1.25,
+        "offsets": {
+          "escudo_comunicaciones": {
+            "x": 12.0,
+            "y": 8.0
+          },
+          "sponsor_movistar": {
+            "x": 8.0,
+            "y": 5.0
+          },
+          "sponsor_adidas": {
+            "x": -8.0,
+            "y": 5.0
+          }
+        }
+      },
+      {
+        "id": "comunicaciones_2024_xxl",
+        "style_id": "comunicaciones_2024",
+        "size": "XXL",
+        "scale_factor": 1.4,
+        "offsets": {
+          "escudo_comunicaciones": {
+            "x": 18.0,
+            "y": 12.0
+          },
+          "sponsor_movistar": {
+            "x": 12.0,
+            "y": 8.0
+          },
+          "sponsor_adidas": {
+            "x": -12.0,
+            "y": 8.0
+          }
+        }
+      }
+    ]
+  },
+  "session": {
+    "active_platen_id": null,
+    "active_style_id": "comunicaciones_2024",
+    "active_variant_id": "comunicaciones_2024_m",
+    "operator_id": "operador_produccion"
+  }
+}
