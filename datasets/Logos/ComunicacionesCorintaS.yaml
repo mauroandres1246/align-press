@@ -1,0 +1,180 @@
+{
+  "version": "2.0.0",
+  "system": {
+    "language": "es",
+    "units": "mm",
+    "theme": "light"
+  },
+  "calibration": null,
+  "hardware": {
+    "camera": {
+      "device_id": 0,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "fps": 30
+    },
+    "gpio": {
+      "enabled": false,
+      "led_pin": 18,
+      "button_pin": 19
+    },
+    "arduino": {
+      "enabled": false,
+      "port": "/dev/ttyUSB0",
+      "baudrate": 9600
+    }
+  },
+  "library": {
+    "platens": [
+      {
+        "id": "default_platen",
+        "name": "Plancha 40x50cm",
+        "size_mm": [
+          400,
+          500
+        ]
+      }
+    ],
+    "styles": [
+      {
+        "id": "basic_tshirt",
+        "name": "Camiseta Básica",
+        "logos": [
+          {
+            "id": "chest",
+            "name": "Pecho",
+            "position_mm": {
+              "x": 200,
+              "y": 150
+            },
+            "tolerance_mm": 2.0,
+            "detector_type": "contour",
+            "roi": {
+              "x": 150,
+              "y": 100,
+              "width": 100,
+              "height": 100
+            },
+            "detector_params": {},
+            "instructions": "Centrar logo en el pecho"
+          },
+          {
+            "id": "sleeve",
+            "name": "Manga",
+            "position_mm": {
+              "x": 350,
+              "y": 200
+            },
+            "tolerance_mm": 1.5,
+            "detector_type": "aruco",
+            "roi": {
+              "x": 300,
+              "y": 150,
+              "width": 100,
+              "height": 100
+            },
+            "detector_params": {
+              "aruco": {
+                "expected_id": 42
+              }
+            },
+            "instructions": "Alinear con costura de manga"
+          }
+        ]
+      },
+      {
+        "id": "Comunicaciones Corinta__Delantera",
+        "name": "Comunicaciones Corinta  Delantera",
+        "logos": [
+          {
+            "id": "logo_1",
+            "name": "Logo comunicaciones.png",
+            "position_mm": {
+              "x": 278.2235096991062,
+              "y": 93.09
+            },
+            "tolerance_mm": 5.0,
+            "detector_type": "template_matching",
+            "roi": {
+              "x": 260.59210857748985,
+              "y": 79.86500000000001,
+              "width": 35.26280224323273,
+              "height": 26.45
+            },
+            "detector_params": {},
+            "instructions": null
+          },
+          {
+            "id": "logo_2",
+            "name": "Logo gulf.png",
+            "position_mm": {
+              "x": 279.2813937664032,
+              "y": 174.9
+            },
+            "tolerance_mm": 5.0,
+            "detector_type": "template_matching",
+            "roi": {
+              "x": 261.64999264478683,
+              "y": 157.27,
+              "width": 35.26280224323273,
+              "height": 35.26
+            },
+            "detector_params": {},
+            "instructions": null
+          },
+          {
+            "id": "logo_3",
+            "name": "Logo gana.png",
+            "position_mm": {
+              "x": 288.0970943272114,
+              "y": 267.29204100370407
+            },
+            "tolerance_mm": 5.0,
+            "detector_type": "template_matching",
+            "roi": {
+              "x": 270.465693205595,
+              "y": 249.6606398820877,
+              "width": 35.26280224323273,
+              "height": 35.26280224323273
+            },
+            "detector_params": {},
+            "instructions": null
+          }
+        ]
+      }
+    ],
+    "variants": [
+      {
+        "id": "tshirt_m",
+        "style_id": "basic_tshirt",
+        "size": "M",
+        "scale_factor": 1.0,
+        "offsets": {}
+      },
+      {
+        "id": "tshirt_l",
+        "style_id": "basic_tshirt",
+        "size": "L",
+        "scale_factor": 1.1,
+        "offsets": {
+          "chest": {
+            "x": 0,
+            "y": 10
+          },
+          "sleeve": {
+            "x": 5,
+            "y": 5
+          }
+        }
+      }
+    ]
+  },
+  "session": {
+    "active_platen_id": "default_platen",
+    "active_style_id": "basic_tshirt",
+    "active_variant_id": "tshirt_m",
+    "operator_id": null
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "version": "2.0.0",
+  "system": {
+    "language": "es",
+    "units": "mm",
+    "theme": "light"
+  },
+  "calibration": null,
+  "hardware": {
+    "camera": {
+      "device_id": 0,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "fps": 30
+    },
+    "gpio": {
+      "enabled": false,
+      "led_pin": 18,
+      "button_pin": 19
+    },
+    "arduino": {
+      "enabled": false,
+      "port": "/dev/ttyUSB0",
+      "baudrate": 9600
+    }
+  },
+  "library": {
+    "platens": [],
+    "styles": [
+      {
+        "id": "Comunicaciones Corinta_Talla S_Delantera",
+        "name": "Comunicaciones Corinta Talla S Delantera",
+        "logos": [
+          {
+            "id": "logo_1",
+            "name": "Logo comunicaciones.png",
+            "position_mm": {
+              "x": 408.343249976635,
+              "y": 126.59346005320549
+            },
+            "tolerance_mm": 5.0,
+            "detector_type": "template_matching",
+            "roi": {
+              "x": 390.7118488550186,
+              "y": 113.3684600532055,
+              "width": 35.26280224323273,
+              "height": 26.45
+            },
+            "detector_params": {},
+            "instructions": null
+          },
+          {
+            "id": "logo_2",
+            "name": "Logo gulf.png",
+            "position_mm": {
+              "x": 208.0505332350731,
+              "y": 220.74514204263687
+            },
+            "tolerance_mm": 5.0,
+            "detector_type": "template_matching",
+            "roi": {
+              "x": 190.41913211345673,
+              "y": 203.11514204263688,
+              "width": 35.26280224323273,
+              "height": 35.26
+            },
+            "detector_params": {},
+            "instructions": null
+          },
+          {
+            "id": "logo_3",
+            "name": "Logo gana.png",
+            "position_mm": {
+              "x": 292.68125861883163,
+              "y": 312.43
+            },
+            "tolerance_mm": 5.0,
+            "detector_type": "template_matching",
+            "roi": {
+              "x": 275.04985749721527,
+              "y": 294.8,
+              "width": 35.26280224323273,
+              "height": 35.26
+            },
+            "detector_params": {},
+            "instructions": null
+          }
+        ]
+      }
+    ],
+    "variants": []
+  },
+  "session": {
+    "active_platen_id": null,
+    "active_style_id": null,
+    "active_variant_id": null,
+    "operator_id": null
+  }
+}

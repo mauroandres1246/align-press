@@ -25,7 +25,8 @@ alignpress_v2/
 │   ├── components/         # Componentes reutilizables
 │   └── app.py             # Launcher de aplicación
 └── tools/          # Herramientas de desarrollo
-    ├── config_designer.py  # Diseñador visual GUI
+    ├── config_designer.py      # Diseñador visual GUI con sistema jerárquico
+    ├── calibration_tool.py     # Herramienta de calibración visual mejorada
     └── detection_simulator.py  # Simulador para debugging
 ```
 
@@ -38,6 +39,58 @@ alignpress/         # Implementación original (mantenida)
 ```
 
 ## ⚙️ Configuración
+
+### **Sistema Jerárquico de Configuraciones (Nuevo)**
+El Configuration Designer v2 implementa un sistema jerárquico para organizar configuraciones por diseño, talla y parte de prenda:
+
+```
+configs/
+├── ComunicacionesFutbol/
+│   ├── TallaS/
+│   │   ├── delantera.json       # Logos de la parte delantera
+│   │   ├── trasera.json         # Logos de la parte trasera
+│   │   ├── manga_izquierda.json # Logos de manga izquierda
+│   │   └── manga_derecha.json   # Logos de manga derecha
+│   ├── TallaM/
+│   │   ├── delantera.json
+│   │   ├── trasera.json
+│   │   └── ...
+│   └── TallaXL/
+│       └── ...
+├── BarcelonaCamiseta/
+│   ├── TallaS/
+│   └── TallaM/
+└── ManchesterUnited/
+    └── ...
+```
+
+**Estructura de archivo de configuración:**
+```json
+{
+  "design": "ComunicacionesFutbol",
+  "size": "TallaM",
+  "part": "delantera",
+  "calibration_factor": 0.3526,
+  "logos": [
+    {
+      "id": "escudo_principal",
+      "name": "Escudo Comunicaciones",
+      "position_mm": {"x": 150.0, "y": 120.0},
+      "roi": {"x": 100.0, "y": 80.0, "width": 100.0, "height": 80.0},
+      "tolerance_mm": 5.0,
+      "detector": "template_matching"
+    },
+    {
+      "id": "patrocinador",
+      "name": "Logo Patrocinador",
+      "position_mm": {"x": 150.0, "y": 200.0},
+      "roi": {"x": 100.0, "y": 180.0, "width": 100.0, "height": 40.0},
+      "tolerance_mm": 3.0,
+      "detector": "template_matching"
+    }
+  ]
+}
+```
 
 ### **Sistema Unificado v2 (Recomendado)**
 La configuración v2 usa un solo archivo YAML con toda la configuración:
@@ -150,18 +203,101 @@ Menú interactivo con acceso a todas las herramientas:
 - 🖥️ UI Application
 - ✅ Integration Tests
 
-### **2. Configuration Designer**
+### **2. Configuration Designer (Mejorado)**
 ```bash
 python -m alignpress_v2.tools.config_designer
 ```
-**Herramienta GUI para:**
-- Cargar imágenes de prendas
-- Colocar logos visualmente con el mouse
-- Definir ROIs interactivamente
-- Generar configuraciones automáticamente
-- Exportar a YAML/JSON
+**Herramienta GUI avanzada para configuración jerárquica:**
 
-### **3. Detection Simulator**
+**Características principales:**
+- ✅ **UI intuitiva para presets (v2.4.0)**: Configuración jerárquica simplificada
+- ✅ **Interactive Preset Loading**: Navegador de archivos para cargar presets existentes con población automática de UI
+- ✅ **Visual Logo Editing**: Click en logo de lista para editarlo, arrastra directamente en imagen para reposicionarlo
+- ✅ **Smart Dropdown Population**: Dropdowns se llenan automáticamente con opciones existentes en la estructura
+- ✅ **Dual Position Control**: Control visual (arrastrar) + control numérico (campos) con sincronización bidireccional
+- ✅ **Drag-to-Move Functionality**: Arrastra logos directamente en la imagen para reposicionarlos en tiempo real
+- ✅ **Click-to-Edit Workflow**: Click en cualquier logo de la lista para entrar inmediatamente en modo edición
+- ✅ **Vista previa de guardado**: Ves exactamente dónde se guardará el preset
+- ✅ **Integración con calibración**: Usa factor mm/pixel automáticamente
+
+**Workflow de Preset Intuitivo (v2.4.0 - Actual):**
+
+### **🆕 Crear Preset Nuevo:**
+1. **📋 Configuración de Preset**:
+   - **Diseño**: [ComunicacionesFutbol ▼] [+ Nuevo]
+   - **Talla**: [TallaM ▼] [+ Nueva] ← Se actualiza según diseño
+   - **Parte**: [delantera ▼] [+ Nueva] ← Se actualiza según talla
+   - **Vista previa**: 💾 Se guardará en: configs/ComunicacionesFutbol/TallaM/delantera.json
+
+2. **🖼️ Recursos**:
+   - **Cargar Imagen** → Foto de la parte delantera de talla M
+   - **Cargar Calibración** → Factor mm/pixel automático
+
+3. **🎯 Por cada logo**:
+   - **📂 Cargar Logo** → Seleccionar PNG/JPG del logo
+   - **🎯 Posicionar** → Arrastrar con mouse en imagen
+   - **✅ Confirmar Logo** → Logo aparece en lista
+
+4. **💾 Guardar**:
+   - **Guardar Preset** → Se crea estructura automáticamente
+
+### **📂 Cargar y Editar Preset Existente:**
+1. **🖼️ Cargar imagen de prenda**
+2. **📂 Click "Cargar Preset"** → Navegador de archivos se abre
+3. **📁 Seleccionar archivo** → Ej: configs/ComunicacionesFutbol/TallaM/delantera.json
+4. **⚡ Carga automática**:
+   - ✅ Dropdowns se llenan: Diseño=ComunicacionesFutbol, Talla=TallaM, Parte=delantera
+   - ✅ Todos los logos aparecen en lista con posiciones exactas
+   - ✅ Calibración se restaura automáticamente
+5. **✏️ Editar logos**:
+   - **Click en logo de lista** → Logo se resalta en naranja para edición
+   - **Arrastrar en imagen** → Reposicionamiento visual en tiempo real
+   - **Campos numéricos** → Control preciso de X,Y,Ancho,Alto
+6. **💾 Guardar cambios** → Preset actualizado
+
+### **🎯 Funcionalidades de Edición Visual:**
+- **Click-to-Edit**: Click cualquier logo en lista → Resaltado naranja + modo edición activo
+- **Drag-to-Move**: Arrastra logo directamente en imagen → Actualización en tiempo real
+- **Dual Control**: Campos numéricos ↔ Posición visual sincronizados bidireccionalmente
+- **Visual Feedback**: Logo seleccionado se destaca con líneas naranjas más gruesas
+
+**Características del nuevo flujo:**
+- ✅ **Un solo paso**: De 4+ clicks a 1 click para agregar logo
+- ✅ **Feedback en tiempo real**: Coordenadas y tamaño visibles durante drag
+- ✅ **Auto-confirmación**: Sin botones "Confirmar Logo" manuales
+- ✅ **Panel unificado**: "Posición y Tamaño" para todas las operaciones
+- ✅ **Cursor crosshair**: Indicación visual clara de modo posicionamiento
+- ✅ **Overlay semi-transparente**: Feedback visual durante posicionamiento
+
+**Archivos generados:**
+- `configs/ComunicacionesFutbol/TallaM/delantera.json`
+- `configs/ComunicacionesFutbol/TallaM/trasera.json`
+- etc.
+
+### **3. Visual Calibration Tool (Mejorado)**
+```bash
+python -m alignpress_v2.tools.calibration_tool
+```
+**Herramienta de calibración visual con detección robusta:**
+
+**Mejoras implementadas:**
+- ✅ **Detección multi-estrategia**: Múltiples algoritmos para mayor precisión
+- ✅ **Compatibilidad OpenCV**: Soporte para versiones 4.x y anteriores
+- ✅ **Preprocesamiento de imagen**: Mejora de contraste automática
+- ✅ **Detección automática de tamaño**: Prueba diferentes configuraciones de patrón
+- ✅ **Logging detallado**: Feedback específico para debugging
+- ✅ **Guardado mejorado**: Sin errores de serialización JSON
+
+**Tipos de patrones soportados:**
+- **Chessboard**: Detección robusta con múltiples tamaños
+- **ArUco Markers**: Compatibilidad con múltiples diccionarios
+
+**Problemas solucionados:**
+- ❌ Error "pylimage doesn't exist" → ✅ Gestión correcta de referencias
+- ❌ Falla detección con iluminación variable → ✅ Múltiples estrategias
+- ❌ Error JSON serialization → ✅ Conversión de tipos correcta
+
+### **4. Detection Simulator**
 ```bash
 python dev_tools_launcher.py --simulator --image test.jpg --config config.yaml
 ```
@@ -251,20 +387,30 @@ logs/
 
 ## 🔄 Flujo de Trabajo Recomendado
 
-### **1. Configuración Inicial**
-1. Ejecutar `python example_camisola_workflow.py` para ver el patrón
-2. Usar Configuration Designer para crear configuración específica
-3. Definir logos y sus posiciones visualmente
+### **1. Configuración Inicial con Workflow Directo (v2.3.0)**
+1. **Abrir Configuration Designer**: `python -m alignpress_v2.tools.config_designer`
+2. **Nueva Configuración**: Crear "TuProyecto/TallaM/delantera"
+3. **Cargar imagen**: Foto de la prenda donde van los logos
+4. **Cargar calibración**: Factor mm/pixel para medidas exactas
+5. **Agregar logos con flujo directo**:
+   - Click "Agregar Logo" → Se abre selector de archivo automáticamente
+   - Seleccionar PNG/JPG del logo → Logo aparece listo para posicionar
+   - Drag & Drop en imagen → Coordenadas en tiempo real en panel
+   - Al soltar → Logo confirmado automáticamente en lista
+6. **Editar posiciones precisas**: Click en lista → Arrastrar o usar campos numéricos
+7. **Guardar configuración**: Archivo JSON con estructura jerárquica
 
 ### **2. Desarrollo y Testing**
 1. Usar Detection Simulator con imágenes de prueba
 2. Ajustar parámetros basándose en resultados de debug
 3. Iterar hasta lograr precisión deseada
+4. **Flujo optimizado**: De 4+ clicks a 1 click por logo
 
 ### **3. Producción**
 1. Ejecutar Integration Tests para validar sistema
 2. Usar UI principal para operación
 3. Monitorear métricas y logs
+4. **Workflow directo** permite configuración rápida en producción
 
 ## 📦 Dependencias
 
@@ -331,6 +477,34 @@ v2_config = config_manager.load()  # Migra automáticamente
 ---
 
 ## 📝 Notas de Versión
+
+### **v2.4.0 - UI Intuitiva para Presets Jerárquicos**
+- 🎯 **Nueva UI "📋 Configuración de Preset"**: Interfaz simplificada y clara
+- ✅ **Dropdowns inteligentes**: Se llenan automáticamente con opciones existentes
+- ✅ **Botones "+ Nuevo"**: Crear diseños, tallas y partes fácilmente
+- ✅ **Vista previa de ruta**: Ver exactamente dónde se guardará el preset
+- ✅ **Carga automática**: Seleccionar preset existente carga logos automáticamente
+- ✅ **Validación inteligente**: Confirmación de sobrescritura y creación de directorios
+- ✅ **Workflow step-by-step**: Diseño → Talla → Parte → Configurar → Guardar
+- ✅ **Retroalimentación visual**: Estados claros con colores (verde=listo, naranja=falta)
+
+### **v2.3.0 - Workflow Simplificado "Cargar Logo"**
+- 🎯 **UI minimalista**: Solo "📂 Cargar Logo" + "✅ Confirmar Logo" + Lista
+- ✅ **Workflow simplificado**: Cargar → Posicionar → Confirmar → Aparece en lista
+- ✅ **Edición por click**: Click en nombre en lista para editar
+- ✅ **Sin botones innecesarios**: Eliminados "Agregar", "Eliminar", "Duplicar"
+- ✅ **Panel unificado**: "Posición y Tamaño" para todas las operaciones
+
+### **v2.2.0 - Workflow Template-First y UX Mejorado**
+- ✅ Template-First workflow revolucionario con separación clara de conceptos
+- ✅ UX híbrido visual + numérico con sincronización bidireccional
+- ✅ Sistema de estados mejorado y feedback instantáneo
+- ✅ Eliminación de sección "Información del Estilo" obsoleta
+
+### **v2.1.0 - Sistema Jerárquico y Calibración Mejorada**
+- ✅ Sistema de configuración jerárquico: Diseño/Talla/Parte
+- ✅ Visual Calibration Tool con detección multi-estrategia
+- ✅ Configuration Designer con template workflow
 
 ### **v2.0.0 - CustomTkinter/MVC Architecture**
 - ✅ Arquitectura MVC moderna con Event Bus
