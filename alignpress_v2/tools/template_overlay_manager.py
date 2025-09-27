@@ -17,6 +17,7 @@ class TemplateOverlayManager:
     DEFAULT_LOGO_SIZE_MM = (30.0, 30.0)  # Tamaño por defecto de logo en mm
     DEFAULT_OVERLAY_ALPHA = 0.7          # Transparencia del overlay
     MAX_TEMPLATE_RATIO = 0.125           # Máximo 12.5% del tamaño de imagen
+    FORCE_300_DPI = True                 # Forzar siempre 300 DPI para logos
 
     def __init__(self):
         """Inicializar TemplateOverlayManager"""
@@ -88,6 +89,9 @@ class TemplateOverlayManager:
         # Convertir a formato BGR estándar
         template_bgr = self._convert_template_to_bgr(template_image)
 
+        # Debug: Log valores de calibración
+        logger.info(f"Template sizing - ID: {template_id}, mm_per_pixel: {mm_per_pixel}")
+
         # Calcular tamaño target
         target_size = self._calculate_target_template_size(
             template_bgr, template_id, mm_per_pixel, template_references
@@ -130,6 +134,11 @@ class TemplateOverlayManager:
         """
         Calcular tamaño target del template
 
+        Prioridad:
+        1. Tamaño original del PNG (preservar dimensiones reales)
+        2. Tamaño definido en template_references
+        3. Fallback a tamaño por defecto
+
         Args:
             template_image: Imagen del template
             template_id: ID del template
@@ -141,13 +150,25 @@ class TemplateOverlayManager:
         """
         template_height, template_width = template_image.shape[:2]
 
-        if mm_per_pixel > 0:
-            # Usar calibración en mm
+        # Obtener información del template
+        template_info = template_references.get(template_id, {}) if template_references else {}
+
+        # PRIORIDAD 1: Verificar si se debe usar tamaño original
+        # Usar configuración específica del template o configuración global
+        use_original_size = self.get_template_sizing_mode(template_id)
+
+        if use_original_size:
+            # Usar tamaño original del PNG con límites de seguridad
+            return self._calculate_size_original_with_limits(
+                template_width, template_height, template_info
+            )
+        elif mm_per_pixel > 0:
+            # PRIORIDAD 2: Usar calibración en mm si está configurado
             return self._calculate_size_with_calibration(
                 template_id, mm_per_pixel, template_references
             )
         else:
-            # Fallback a tamaño en píxeles
+            # PRIORIDAD 3: Fallback a tamaño en píxeles
             return self._calculate_size_pixel_fallback(template_width, template_height)
 
     def _calculate_size_with_calibration(self, template_id: str,
@@ -166,6 +187,11 @@ class TemplateOverlayManager:
         """
         # Obtener información del template
         template_info = template_references.get(template_id, {}) if template_references else {}
+
+        # Si está habilitado FORCE_300_DPI, usar siempre 300 DPI en lugar del mm_per_pixel recibido
+        if self.FORCE_300_DPI:
+            mm_per_pixel = 25.4 / 300.0
+            logger.info(f"Forzando 300 DPI para logo: {mm_per_pixel:.6f} mm/pixel")
 
         # Usar tamaño definido o por defecto
         if 'size_mm' in template_info:
@@ -186,7 +212,7 @@ class TemplateOverlayManager:
     def _calculate_size_pixel_fallback(self, template_width: int,
                                      template_height: int) -> Tuple[int, int]:
         """
-        Calcular tamaño usando fallback en píxeles
+        Calcular tamaño usando fallback en píxeles - SOLO para casos extremos
 
         Args:
             template_width: Ancho original del template
@@ -195,10 +221,8 @@ class TemplateOverlayManager:
         Returns:
             Tuple con (width, height) en píxeles
         """
-        # Limitar tamaño máximo basado en proporción de imagen
-        # Nota: necesitaríamos las dimensiones de la imagen base,
-        # pero usamos valores razonables por ahora
-        max_size = 100  # Tamaño máximo por defecto
+        # Aumentar límites para permitir logos más grandes por defecto
+        max_size = 400  # Aumentado de 100 a 400 píxeles
 
         if max(template_width, template_height) > max_size:
             scale = max_size / max(template_width, template_height)
@@ -209,6 +233,61 @@ class TemplateOverlayManager:
             new_height = template_height
 
         self.template_size = (new_width, new_height)
+
+        # Calcular tamaño en mm siempre con 300 DPI para consistencia
+        mm_per_pixel_300dpi = 25.4 / 300.0
+        self.template_size_mm = (new_width * mm_per_pixel_300dpi, new_height * mm_per_pixel_300dpi)
+
+        return new_width, new_height
+
+    def _calculate_size_original_with_limits(self, template_width: int,
+                                           template_height: int,
+                                           template_info: Dict) -> Tuple[int, int]:
+        """
+        Calcular tamaño usando dimensiones originales del PNG con límites de seguridad
+
+        Args:
+            template_width: Ancho original del template
+            template_height: Alto original del template
+            template_info: Información del template con configuraciones
+
+        Returns:
+            Tuple con (width, height) en píxeles
+        """
+        # Obtener límites configurables - Permitir logos de alta resolución (hasta 4K)
+        max_width = template_info.get('max_width', 4000)   # Límite máximo de ancho - 4K compatible
+        max_height = template_info.get('max_height', 4500) # Límite máximo de alto - 4K+ compatible
+        max_ratio = template_info.get('max_ratio', 0.9)    # Máximo 90% de la imagen base
+
+        # Usar tamaño original como punto de partida
+        new_width = template_width
+        new_height = template_height
+
+        # Aplicar límites de seguridad
+        if new_width > max_width or new_height > max_height:
+            # Redimensionar manteniendo aspecto
+            scale_w = max_width / new_width if new_width > max_width else 1.0
+            scale_h = max_height / new_height if new_height > max_height else 1.0
+            scale = min(scale_w, scale_h)
+
+            new_width = int(new_width * scale)
+            new_height = int(new_height * scale)
+
+        # Guardar tamaños calculados
+        self.template_size = (new_width, new_height)
+
+        # Calcular tamaño en mm usando el factor de calibración correcto
+        # Si no hay calibración específica, asumir 300 DPI (estándar de impresión)
+        if 'mm_per_pixel' in template_info and template_info['mm_per_pixel'] > 0:
+            mm_per_pixel_for_calc = template_info['mm_per_pixel']
+        else:
+            # Factor para 300 DPI: 25.4mm / 300dpi = 0.0847 mm/pixel
+            mm_per_pixel_for_calc = 25.4 / 300.0
+
+        self.template_size_mm = (new_width * mm_per_pixel_for_calc, new_height * mm_per_pixel_for_calc)
+
+        logger.info(f"Template size calculated: {new_width}x{new_height}px = {self.template_size_mm[0]:.1f}x{self.template_size_mm[1]:.1f}mm")
+
         return new_width, new_height
 
     def _calculate_template_position(self, base_image: np.ndarray,
@@ -309,6 +388,43 @@ class TemplateOverlayManager:
             alpha: Valor entre 0.0 (transparente) y 1.0 (opaco)
         """
         self.DEFAULT_OVERLAY_ALPHA = max(0.0, min(1.0, alpha))
+
+    def set_template_sizing_mode(self, use_original_size: bool = True,
+                               template_id: str = None):
+        """
+        Configurar modo de dimensionamiento de templates
+
+        Args:
+            use_original_size: True para usar tamaño original del PNG,
+                             False para usar tamaño calibrado en mm
+            template_id: ID específico del template (opcional)
+        """
+        if template_id:
+            # Configurar para template específico
+            if not hasattr(self, 'template_sizing_config'):
+                self.template_sizing_config = {}
+            self.template_sizing_config[template_id] = {
+                'use_original_size': use_original_size
+            }
+        else:
+            # Configurar globalmente
+            self.default_use_original_size = use_original_size
+
+    def get_template_sizing_mode(self, template_id: str = None) -> bool:
+        """
+        Obtener modo de dimensionamiento para un template
+
+        Args:
+            template_id: ID del template (opcional)
+
+        Returns:
+            True si debe usar tamaño original, False si debe usar calibrado
+        """
+        if template_id and hasattr(self, 'template_sizing_config'):
+            return self.template_sizing_config.get(template_id, {}).get(
+                'use_original_size', getattr(self, 'default_use_original_size', True)
+            )
+        return getattr(self, 'default_use_original_size', True)
 
     def calculate_template_bounds(self, template_position: Tuple[int, int]) -> Optional[Tuple[int, int, int, int]]:
         """

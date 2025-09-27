@@ -1276,8 +1276,14 @@ class ConfigDesigner:
                 size = template_info.get('size', (50, 50))
                 self.pos_x_var.set(str(int(pos[0] * self.mm_per_pixel) if self.mm_per_pixel else pos[0]))
                 self.pos_y_var.set(str(int(pos[1] * self.mm_per_pixel) if self.mm_per_pixel else pos[1]))
-                self.width_var.set(str(int(size[0] * self.mm_per_pixel) if self.mm_per_pixel else size[0]))
-                self.height_var.set(str(int(size[1] * self.mm_per_pixel) if self.mm_per_pixel else size[1]))
+                # Para templates, usar las dimensiones reales calculadas si están disponibles
+                if hasattr(self, 'template_size_mm') and self.template_size_mm:
+                    self.width_var.set(str(round(self.template_size_mm[0], 1)))
+                    self.height_var.set(str(round(self.template_size_mm[1], 1)))
+                else:
+                    # Fallback para datos antiguos o cuando no hay template_size_mm
+                    self.width_var.set(str(int(size[0] * self.mm_per_pixel) if self.mm_per_pixel else size[0]))
+                    self.height_var.set(str(int(size[1] * self.mm_per_pixel) if self.mm_per_pixel else size[1]))
         elif self.editing_mode == "logo" and self.selected_logo_index is not None and self.current_style:
             # Update panel for logo editing
             if self.selected_logo_index < len(self.current_style.logos):
@@ -2222,8 +2228,14 @@ class ConfigDesigner:
             center_x_mm = (img_width * self.mm_per_pixel) / 2
             center_y_mm = (img_height * self.mm_per_pixel) / 2
 
-            template_width_mm = template_info['size'][1] * self.mm_per_pixel
-            template_height_mm = template_info['size'][0] * self.mm_per_pixel
+            # Use correct template dimensions
+            if self.template_size_mm:
+                template_width_mm = self.template_size_mm[0]
+                template_height_mm = self.template_size_mm[1]
+            else:
+                # Fallback con 300 DPI
+                template_width_mm = template_info['size'][1] * (25.4 / 300.0)
+                template_height_mm = template_info['size'][0] * (25.4 / 300.0)
 
             # Create new logo
             logo_id = f"logo_{len(self.current_style.logos) + 1}" if self.current_style else "logo_1"
@@ -2432,9 +2444,14 @@ class ConfigDesigner:
             pos_x_mm = self.template_position[0] * self.mm_per_pixel
             pos_y_mm = self.template_position[1] * self.mm_per_pixel
 
-            # Calculate template size in mm
-            template_width_mm = self.template_size[0] * self.mm_per_pixel
-            template_height_mm = self.template_size[1] * self.mm_per_pixel
+            # Calculate template size in mm using correct dimensions
+            if self.template_size_mm:
+                template_width_mm = self.template_size_mm[0]
+                template_height_mm = self.template_size_mm[1]
+            else:
+                # Fallback con 300 DPI
+                template_width_mm = self.template_size[0] * (25.4 / 300.0)
+                template_height_mm = self.template_size[1] * (25.4 / 300.0)
 
             # Create new logo
             logo_id = f"logo_{len(self.current_style.logos) + 1}" if self.current_style else "logo_1"
@@ -2568,11 +2585,18 @@ class ConfigDesigner:
             self.pos_x_var.set(round(pos_x_mm, 2))
             self.pos_y_var.set(round(pos_y_mm, 2))
 
-            # Update size fields
-            width_mm = self.template_size[0] * self.mm_per_pixel
-            height_mm = self.template_size[1] * self.mm_per_pixel
-            self.width_var.set(round(width_mm, 2))
-            self.height_var.set(round(height_mm, 2))
+            # Update size fields using correct dimensions from template_overlay_manager
+            if self.template_size_mm:
+                # Usar las dimensiones ya calculadas correctamente por template_overlay_manager
+                width_mm, height_mm = self.template_size_mm
+                self.width_var.set(round(width_mm, 2))
+                self.height_var.set(round(height_mm, 2))
+            else:
+                # Fallback: calcular con factor por defecto si no hay dimensiones
+                width_mm = self.template_size[0] * (25.4 / 300.0)  # Asumir 300 DPI
+                height_mm = self.template_size[1] * (25.4 / 300.0)
+                self.width_var.set(round(width_mm, 2))
+                self.height_var.set(round(height_mm, 2))
 
             # Update size display
             self.template_size_label.config(text=f"{self.template_size[0]}×{self.template_size[1]}px")
@@ -2694,8 +2718,14 @@ class ConfigDesigner:
             pos_y_mm = img_y * self.mm_per_pixel
 
             template_info = self.template_references[self.selected_template_id]
-            template_width_mm = template_info['size'][1] * self.mm_per_pixel
-            template_height_mm = template_info['size'][0] * self.mm_per_pixel
+            # Use correct template dimensions
+            if self.template_size_mm:
+                template_width_mm = self.template_size_mm[0]
+                template_height_mm = self.template_size_mm[1]
+            else:
+                # Fallback con 300 DPI
+                template_width_mm = template_info['size'][1] * (25.4 / 300.0)
+                template_height_mm = template_info['size'][0] * (25.4 / 300.0)
 
             # Update template info to show position
             self.template_info_label.config(
