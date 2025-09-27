@@ -30,11 +30,32 @@ from ..config.models import (
 )
 from ..config.config_manager import ConfigManager
 
+# Import new specialized classes - Phase 2 Extract Class Pattern
+from .preset_manager import PresetManager
+from .image_processor import ImageProcessor
+from .ruler_grid_system import RulerGridSystem
+from .ui_manager import UIManager
+
+# Import Phase 3 Strangler Fig Pattern classes
+from .variant_generator import VariantGenerator
+from .template_overlay_manager import TemplateOverlayManager
+
 logger = logging.getLogger(__name__)
 
 
 class ConfigDesigner:
     """Interactive configuration designer for multi-logo garments"""
+
+    # Constants for refactoring - Phase 1
+    MM_TO_INCH = 25.4  # Conversion factor mm to inches
+    DEFAULT_DPI = 300  # Default DPI for calculations
+    RULER_WIDTH = 40   # Horizontal ruler width in pixels
+    RULER_HEIGHT = 30  # Vertical ruler height in pixels
+    MIN_RULER_SPACING = 20  # Minimum spacing for rulers
+    MIN_GRID_SPACING = 15   # Minimum spacing for grid
+    GRID_COLOR = "#DDDDDD"  # Grid line color
+    RULER_BG_COLOR = "#F5F5F5"  # Ruler background color
+    RULER_BORDER_COLOR = "#999999"  # Ruler border color
 
     def __init__(self):
         if not CV2_AVAILABLE or tk is None:
@@ -44,8 +65,7 @@ class ConfigDesigner:
         self.root.title("AlignPress v2 - Configuration Designer")
         self.root.geometry("1400x900")
 
-        # Current state
-        self.current_image: Optional[np.ndarray] = None
+        # Core application state
         self.current_config: Optional[AlignPressConfig] = None
         self.current_style: Optional[Style] = None
         self.calibration_data: Optional[Dict] = None
@@ -55,50 +75,112 @@ class ConfigDesigner:
         self.current_design: str = ""  # e.g., "ComunicacionesFutbol"
         self.current_size: str = ""    # e.g., "TallaM"
         self.current_part: str = ""    # e.g., "delantera"
-        self.config_root_path: Path = Path("./configs")  # Base path for configurations
 
-        # Template system
-        self.logo_templates: Dict[str, np.ndarray] = {}  # logo_id -> template image
-        self.template_references: Dict[str, Dict] = {}   # logo_id -> template metadata
+        # Initialize specialized managers - Phase 2 Architecture
+        self.preset_manager = PresetManager(Path("./configs"))
+        self.image_processor = ImageProcessor()
+        self.ui_manager = UIManager(self.root)
 
-        # Visual template state
-        self.current_template_overlay: Optional[np.ndarray] = None
-        self.template_position: Tuple[int, int] = (0, 0)  # Current template position in image coords
-        self.template_canvas_id: Optional[int] = None  # Canvas object ID for template
-        self.template_size: Tuple[int, int] = (50, 50)  # Current template size in pixels
-        self.template_size_mm: Tuple[float, float] = (50.0, 50.0)  # Template size in mm
-        self.updating_from_drag: bool = False  # Prevent circular updates
+        # Initialize Phase 3 Strangler Fig Pattern managers
+        self.variant_generator = VariantGenerator(self.root)
+        self.template_overlay_manager = TemplateOverlayManager()
 
-        # Visual enhancement settings
-        self.show_rulers: bool = True  # Show horizontal and vertical rulers
-        self.show_grid: bool = True   # Show grid overlay
-        self.grid_spacing_mm: float = 10.0  # Grid spacing in mm (increased from 5.0)
-        self.ruler_spacing_mm: float = 10.0  # Ruler marks spacing in mm
-
-        # Mouse interaction state
-        self.is_dragging: bool = False
-        self.drag_start_pos: Optional[Tuple[int, int]] = None
-        self.selected_template_id: Optional[str] = None  # Active template (floating)
-        self.dragging_template: bool = False
-        self.dragging_logo: bool = False
-
-        # Logo selection state (confirmed logos in list)
-        self.selected_logo_index: Optional[int] = None  # Selected logo from list
+        # Logo selection state
+        self.selected_logo_index: Optional[int] = None
         self.editing_mode: str = "none"  # "template", "logo", "none"
 
-        # UI components
-        self.image_canvas = None
-        self.logo_list = None
+        # Template interaction state
+        self.selected_template_id: Optional[str] = None
+        self.dragging_template: bool = False
+        self.dragging_logo: bool = False
+        self.updating_from_drag: bool = False
+        self.drag_start_pos: Optional[tuple] = None
 
-        # Visualization state
-        self.canvas_scale = 1.0
+        # Canvas and visualization
+        self.image_canvas = None
+        self.ruler_grid_system: Optional[RulerGridSystem] = None
         self.roi_rectangles = {}  # logo_id -> rectangle_id
         self.position_markers = {}  # logo_id -> marker_id
-        self.photo_image = None  # Keep reference to prevent garbage collection
-        self.preview_images = {}  # Keep references to preview images
 
+        # Image state variables
+        self.current_image = None  # Current loaded image
+        self.canvas_scale: float = 1.0  # Canvas zoom scale factor
+
+        # Ruler and grid configuration
+        self.ruler_spacing_mm: float = 10.0  # Default ruler spacing in mm
+        self.grid_spacing_mm: float = 5.0    # Default grid spacing in mm
+
+        # Template system (preserved for compatibility)
+        self.template_positions: Dict[str, Dict] = {}
+
+        # UI Components initialization (to avoid AttributeError)
+        self.calib_status_label = None
+        self.calib_factor_label = None
+        self.template_info_label = None
+        self.template_size_label = None
+        self.template_status_label = None
+        self.logo_list = None
+        self.design_var = None
+        self.size_var = None
+        self.part_var = None
+        self.design_combo = None
+        self.size_combo = None
+        self.part_combo = None
+        self.save_path_label = None
+        self.config_status_label = None
+
+        # Configuration and template system variables
+        self.config_root_path = Path("./configs")
+        self.logo_templates = {}  # Template cache
+        self.template_references = {}  # Template metadata cache
+
+        # Setup UI and register callbacks
         self._setup_ui()
-        logger.info("ConfigDesigner initialized")
+        self._register_ui_callbacks()
+
+        logger.info("ConfigDesigner initialized with new architecture")
+
+    def _register_ui_callbacks(self):
+        """Register callbacks for UI events with new architecture"""
+        # Image operations
+        self.ui_manager.register_callback("load_image", self._load_image)
+
+        # Preset operations
+        self.ui_manager.register_callback("load_preset", self._load_preset_with_manager)
+        self.ui_manager.register_callback("save_preset", self._save_preset_with_manager)
+
+        # Configuration operations
+        self.ui_manager.register_callback("new_config", self._new_configuration)
+        self.ui_manager.register_callback("load_config", self._load_config)
+        self.ui_manager.register_callback("save_config", self._save_config)
+
+        # Design/Size/Part operations
+        self.ui_manager.register_callback("on_design_changed", self._on_design_changed)
+        self.ui_manager.register_callback("on_design_typed", self._on_design_typed)
+        self.ui_manager.register_callback("on_size_changed", self._on_size_changed)
+        self.ui_manager.register_callback("on_size_typed", self._on_size_typed)
+        self.ui_manager.register_callback("on_part_changed", self._on_part_changed)
+        self.ui_manager.register_callback("on_part_typed", self._on_part_typed)
+        self.ui_manager.register_callback("new_design", self._new_design)
+        self.ui_manager.register_callback("new_size", self._new_size)
+        self.ui_manager.register_callback("new_part", self._new_part)
+
+        # Logo operations
+        self.ui_manager.register_callback("on_logo_select", self._on_logo_select)
+        self.ui_manager.register_callback("add_logo", self._add_logo_dialog)
+        self.ui_manager.register_callback("remove_logo", self._remove_logo)
+
+        # Visual controls
+        self.ui_manager.register_callback("toggle_rulers", self._toggle_rulers)
+        self.ui_manager.register_callback("toggle_grid", self._toggle_grid)
+
+        # Position controls
+        self.ui_manager.register_callback("on_position_changed", self._update_logo_from_position_panel)
+        self.ui_manager.register_callback("on_size_changed", self._update_logo_from_position_panel)
+
+        # Tools
+        self.ui_manager.register_callback("generate_variants", self._generate_variants_with_generator)
+        self.ui_manager.register_callback("export_yaml", self._export_yaml)
 
     def _setup_ui(self):
         """Setup the user interface"""
@@ -116,7 +198,7 @@ class ConfigDesigner:
         right_frame.pack_propagate(False)
 
         self._setup_image_panel(left_frame)
-        self._setup_config_panel(right_frame)
+        self._setup_config_panel_refactored(right_frame)
         self._setup_menu()
 
     def _setup_menu(self):
@@ -139,7 +221,7 @@ class ConfigDesigner:
         # Tools menu
         tools_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Herramientas", menu=tools_menu)
-        tools_menu.add_command(label="Generar Variantes de Talla", command=self._generate_variants)
+        tools_menu.add_command(label="Generar Variantes de Talla", command=self._generate_variants_with_generator)
         tools_menu.add_command(label="Probar Detección", command=self._test_detection)
         tools_menu.add_command(label="Vista Previa de ROIs", command=self._preview_rois)
         tools_menu.add_command(label="Exportar Debug Image", command=self._export_debug_image)
@@ -195,87 +277,140 @@ class ConfigDesigner:
         # Tooltip for dimensions
         self.tooltip_label = None
 
-    def _setup_config_panel(self, parent):
-        """Setup configuration panel"""
-        # Smart preset configuration selector
+    def _setup_preset_configuration_section(self, parent):
+        """
+        Setup preset configuration selector section
+
+        Phase 3 Strangler Fig Pattern - Extracted method
+        """
         preset_frame = ttk.LabelFrame(parent, text="📋 Configuración de Preset")
         preset_frame.pack(fill=tk.X, pady=(0, 10))
 
-        # Design selector with smart dropdown
-        design_row = ttk.Frame(preset_frame)
-        design_row.grid(row=0, column=0, columnspan=3, sticky=tk.EW, padx=5, pady=3)
-        ttk.Label(design_row, text="Diseño:").pack(side=tk.LEFT)
+        # Initialize UI variables
         self.design_var = tk.StringVar()
-        self.design_combo = ttk.Combobox(design_row, textvariable=self.design_var, width=20)
-        self.design_combo.pack(side=tk.LEFT, padx=(5, 2))
-        ttk.Button(design_row, text="+ Nuevo", command=self._new_design, width=8).pack(side=tk.LEFT, padx=2)
-        self.design_combo.bind('<<ComboboxSelected>>', self._on_design_changed)
-        self.design_combo.bind('<KeyRelease>', self._on_design_typed)
+        self.design_combo = ttk.Combobox(preset_frame, textvariable=self.design_var, width=20)
+
+        self.size_var = tk.StringVar()
+        self.size_combo = ttk.Combobox(preset_frame, textvariable=self.size_var, width=20)
+
+        self.part_var = tk.StringVar()
+        self.part_combo = ttk.Combobox(preset_frame, textvariable=self.part_var, width=20)
+
+        # Design selector with smart dropdown
+        self._create_selector_row(preset_frame, 0, "Diseño:", self.design_var, self.design_combo,
+                                 "Nuevo", self._new_design, self._on_design_changed, self._on_design_typed)
 
         # Size selector with smart dropdown
-        size_row = ttk.Frame(preset_frame)
-        size_row.grid(row=1, column=0, columnspan=3, sticky=tk.EW, padx=5, pady=3)
-        ttk.Label(size_row, text="Talla:").pack(side=tk.LEFT, padx=(0, 9))
-        self.size_var = tk.StringVar()
-        self.size_combo = ttk.Combobox(size_row, textvariable=self.size_var, width=20)
-        self.size_combo.pack(side=tk.LEFT, padx=(5, 2))
-        ttk.Button(size_row, text="+ Nueva", command=self._new_size, width=8).pack(side=tk.LEFT, padx=2)
-        self.size_combo.bind('<<ComboboxSelected>>', self._on_size_changed)
-        self.size_combo.bind('<KeyRelease>', self._on_size_typed)
+        self._create_selector_row(preset_frame, 1, "Talla:", self.size_var, self.size_combo,
+                                 "Nueva", self._new_size, self._on_size_changed, self._on_size_typed)
 
         # Part selector with smart dropdown
-        part_row = ttk.Frame(preset_frame)
-        part_row.grid(row=2, column=0, columnspan=3, sticky=tk.EW, padx=5, pady=3)
-        ttk.Label(part_row, text="Parte:").pack(side=tk.LEFT, padx=(0, 7))
-        self.part_var = tk.StringVar()
-        self.part_combo = ttk.Combobox(part_row, textvariable=self.part_var, width=20)
-        self.part_combo.pack(side=tk.LEFT, padx=(5, 2))
-        ttk.Button(part_row, text="+ Nueva", command=self._new_part, width=8).pack(side=tk.LEFT, padx=2)
-        self.part_combo.bind('<<ComboboxSelected>>', self._on_part_changed)
-        self.part_combo.bind('<KeyRelease>', self._on_part_typed)
+        self._create_selector_row(preset_frame, 2, "Parte:", self.part_var, self.part_combo,
+                                 "Nueva", self._new_part, self._on_part_changed, self._on_part_typed)
 
-        # Save path preview
-        self.save_path_label = ttk.Label(preset_frame, text="💾 Se guardará en: (selecciona opciones arriba)",
-                                       foreground="blue", font=("TkDefaultFont", 8))
-        self.save_path_label.grid(row=3, column=0, columnspan=3, sticky=tk.W, padx=5, pady=(10, 5))
+        # Save path preview with better formatting
+        path_frame = ttk.Frame(preset_frame)
+        path_frame.pack(fill=tk.X, padx=8, pady=(12, 8))
+
+        self.save_path_label = ttk.Label(path_frame, text="💾 Se guardará en: (selecciona opciones arriba)",
+                                       foreground="blue", font=("TkDefaultFont", 8), wraplength=350)
+        self.save_path_label.pack(fill=tk.X)
 
         # Action buttons
-        action_frame = ttk.Frame(preset_frame)
-        action_frame.grid(row=4, column=0, columnspan=3, sticky=tk.EW, padx=5, pady=5)
+        self._create_preset_action_buttons(preset_frame)
 
-        ttk.Button(action_frame, text="📂 Cargar Preset",
-                  command=self._load_preset).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(action_frame, text="💾 Guardar Preset",
-                  command=self._save_preset).pack(side=tk.LEFT, padx=(0, 5))
+        # Configuration status with better spacing
+        status_frame = ttk.Frame(preset_frame)
+        status_frame.pack(fill=tk.X, padx=8, pady=(5, 8))
 
-        # Configuration status
-        self.config_status_label = ttk.Label(preset_frame, text="Estado: Selecciona o crea configuración", foreground="orange")
-        self.config_status_label.grid(row=5, column=0, columnspan=3, sticky=tk.W, padx=5, pady=2)
+        self.config_status_label = ttk.Label(status_frame, text="Estado: Selecciona o crea configuración",
+                                           foreground="orange", font=("TkDefaultFont", 8))
+        self.config_status_label.pack(fill=tk.X)
+        return preset_frame
 
-        preset_frame.columnconfigure(0, weight=1)
+    def _create_selector_row(self, parent, row, label_text, var, combo, button_text, button_command,
+                           select_callback, type_callback):
+        """Create a perfectly aligned selector row with fixed positioning"""
+        row_frame = ttk.Frame(parent)
+        row_frame.pack(fill=tk.X, padx=8, pady=3)
 
-        # Calibration information
-        calib_frame = ttk.LabelFrame(parent, text="Calibración")
+        # Create three sections with fixed proportions
+        # Label section - fixed width
+        label_frame = ttk.Frame(row_frame, width=80)
+        label_frame.pack(side=tk.LEFT, fill=tk.Y)
+        label_frame.pack_propagate(False)  # Maintain fixed width
+
+        label = ttk.Label(label_frame, text=label_text, anchor=tk.W)
+        label.pack(fill=tk.BOTH, padx=(0, 5))
+
+        # Combobox section - expandable
+        combo_frame = ttk.Frame(row_frame)
+        combo_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+
+        combo.configure(width=1)  # Minimal width, will expand with frame
+        combo.pack(fill=tk.X)
+
+        # Button section - fixed width
+        button_frame = ttk.Frame(row_frame, width=90)
+        button_frame.pack(side=tk.RIGHT, fill=tk.Y)
+        button_frame.pack_propagate(False)  # Maintain fixed width
+
+        button = ttk.Button(button_frame, text=f"+ {button_text}")
+        button.configure(command=button_command)
+        button.pack(fill=tk.BOTH)
+
+        combo.bind('<<ComboboxSelected>>', select_callback)
+        combo.bind('<KeyRelease>', type_callback)
+
+    def _create_preset_action_buttons(self, parent):
+        """Create beautifully spaced preset action buttons"""
+        action_frame = ttk.Frame(parent)
+        action_frame.pack(fill=tk.X, padx=8, pady=(8, 5))
+
+        # Center the buttons with proper spacing
+        button_container = ttk.Frame(action_frame)
+        button_container.pack(anchor=tk.CENTER)
+
+        ttk.Button(button_container, text="📂 Cargar Preset",
+                  command=self._load_preset, width=15).pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Button(button_container, text="💾 Guardar Preset",
+                  command=self._save_preset, width=15).pack(side=tk.LEFT)
+
+    def _setup_calibration_section(self, parent):
+        """
+        Setup beautifully spaced calibration information section
+
+        Phase 3 Strangler Fig Pattern - Extracted method
+        """
+        calib_frame = ttk.LabelFrame(parent, text="📏 Calibración")
         calib_frame.pack(fill=tk.X, pady=(0, 10))
 
-        self.calib_status_label = ttk.Label(calib_frame, text="Estado: Sin calibrar", foreground="red")
-        self.calib_status_label.pack(fill=tk.X, padx=5, pady=2)
+        # Status with consistent padding
+        self.calib_status_label = ttk.Label(calib_frame, text="Estado: Sin calibrar", foreground="red",
+                                          font=("TkDefaultFont", 9))
+        self.calib_status_label.pack(fill=tk.X, padx=8, pady=(6, 2))
 
-        self.calib_factor_label = ttk.Label(calib_frame, text="Factor: N/A")
-        self.calib_factor_label.pack(fill=tk.X, padx=5, pady=2)
+        # Factor with consistent padding
+        self.calib_factor_label = ttk.Label(calib_frame, text="Factor: N/A",
+                                          font=("TkDefaultFont", 9))
+        self.calib_factor_label.pack(fill=tk.X, padx=8, pady=(2, 6))
 
-        # Style information removed - now handled by hierarchical system
-        # (Design/Size/Part defines the configuration directly)
+        return calib_frame
 
-        # Logo list
-        logo_frame = ttk.LabelFrame(parent, text="Logos")
+    def _setup_logo_list_section(self, parent):
+        """
+        Setup beautifully designed logo list section
+
+        Phase 3 Strangler Fig Pattern - Extracted method
+        """
+        logo_frame = ttk.LabelFrame(parent, text="📝 Lista de Logos")
         logo_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
 
-        # Logo list with scrollbar
+        # Logo list with scrollbar - optimized height
         list_frame = ttk.Frame(logo_frame)
-        list_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=6)
 
-        self.logo_list = tk.Listbox(list_frame, height=8)
+        self.logo_list = tk.Listbox(list_frame, height=6, font=("TkDefaultFont", 9))
         logo_scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.logo_list.yview)
         self.logo_list.configure(yscrollcommand=logo_scrollbar.set)
 
@@ -284,26 +419,49 @@ class ConfigDesigner:
 
         self.logo_list.bind('<<ListboxSelect>>', self._on_logo_select)
 
-        # Logo buttons
+        # Centered logo control buttons with better spacing
+        button_frame = ttk.Frame(logo_frame)
+        button_frame.pack(fill=tk.X, padx=8, pady=(6, 8))
 
-        # Template management
-        self._setup_template_panel(parent)
+        # Center the buttons
+        button_container = ttk.Frame(button_frame)
+        button_container.pack(anchor=tk.CENTER)
 
-        # Legacy logo properties panel removed - now using unified "Posición Exacta" panel
+        ttk.Button(button_container, text="➕ Agregar Logo",
+                  command=self._add_logo_dialog, width=14).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(button_container, text="➖ Eliminar Logo",
+                  command=self._remove_logo, width=14).pack(side=tk.LEFT)
 
-    def _setup_template_panel(self, parent):
-        """Setup simplified template panel"""
-        template_frame = ttk.LabelFrame(parent, text="➕ Crear Nuevo Logo")
-        template_frame.pack(fill=tk.X, pady=(0, 10))
+        return logo_frame
 
+    def _setup_config_panel_refactored(self, parent):
+        """
+        Setup configuration panel using extracted methods
+
+        Phase 3 Strangler Fig Pattern - New implementation
+        """
+        # Setup each section using extracted methods
+        self._setup_preset_configuration_section(parent)
+        self._setup_calibration_section(parent)
+        self._setup_logo_list_section(parent)
+
+        # Setup template panel
+        self._setup_template_panel_refactored(parent)
+
+    def _setup_template_info_section(self, parent):
+        """
+        Setup template information and instructions section
+
+        Phase 3 Strangler Fig Pattern - Extracted method
+        """
         # Clear instruction for template-first workflow
-        instruction_label = ttk.Label(template_frame,
+        instruction_label = ttk.Label(parent,
                                      text="Template flotante → Posicionar → Confirmar → Aparece en lista de logos",
                                      foreground="blue")
         instruction_label.pack(fill=tk.X, padx=5, pady=2)
 
         # Template info and preview
-        info_frame = ttk.Frame(template_frame)
+        info_frame = ttk.Frame(parent)
         info_frame.pack(fill=tk.X, padx=5, pady=2)
 
         self.template_info_label = ttk.Label(info_frame, text="📁 Sin template cargado", foreground="gray")
@@ -314,19 +472,39 @@ class ConfigDesigner:
         self.template_size_label.pack(side=tk.RIGHT)
 
         # Load button
-        load_button = ttk.Button(template_frame, text="📂 Cargar Logo",
+        load_button = ttk.Button(parent, text="📂 Cargar Logo",
                                 command=self._load_and_show_template)
         load_button.pack(fill=tk.X, padx=5, pady=5)
 
+        return parent
+
+    def _setup_position_controls_section(self, parent):
+        """
+        Setup position controls section
+
+        Phase 3 Strangler Fig Pattern - Extracted method
+        """
         # Position controls (initially hidden) - works for both templates and logos
-        self.position_frame = ttk.LabelFrame(template_frame, text="📐 Posición y Tamaño")
+        self.position_frame = ttk.LabelFrame(parent, text="📐 Posición y Tamaño")
 
         # Dynamic editing indicator
         self.editing_indicator = ttk.Label(self.position_frame, text="", foreground="blue", font=("TkDefaultFont", 8))
         self.editing_indicator.pack(fill=tk.X, padx=5, pady=(5, 0))
 
         # Position fields
-        pos_grid = ttk.Frame(self.position_frame)
+        self._create_position_fields(self.position_frame)
+
+        # Size fields
+        self._create_size_fields(self.position_frame)
+
+        # Action buttons
+        self._create_template_action_buttons(self.position_frame)
+
+        return self.position_frame
+
+    def _create_position_fields(self, parent):
+        """Create X/Y position input fields"""
+        pos_grid = ttk.Frame(parent)
         pos_grid.pack(fill=tk.X, padx=5, pady=5)
 
         # X position
@@ -343,8 +521,9 @@ class ConfigDesigner:
         self.pos_y_entry.grid(row=0, column=3)
         self.pos_y_var.trace('w', self._on_position_changed)
 
-        # Size fields
-        size_grid = ttk.Frame(self.position_frame)
+    def _create_size_fields(self, parent):
+        """Create width/height size input fields"""
+        size_grid = ttk.Frame(parent)
         size_grid.pack(fill=tk.X, padx=5, pady=5)
 
         # Width
@@ -361,8 +540,9 @@ class ConfigDesigner:
         self.height_entry.grid(row=0, column=3)
         self.height_var.trace('w', self._on_size_changed)
 
-        # Action buttons
-        action_frame = ttk.Frame(self.position_frame)
+    def _create_template_action_buttons(self, parent):
+        """Create template action buttons"""
+        action_frame = ttk.Frame(parent)
         action_frame.pack(fill=tk.X, padx=5, pady=5)
 
         ttk.Button(action_frame, text="📍 Centrar en Imagen",
@@ -372,9 +552,30 @@ class ConfigDesigner:
         ttk.Button(action_frame, text="❌ Cancelar",
                   command=self._cancel_template).pack(side=tk.LEFT)
 
-        # Status
-        self.template_status_label = ttk.Label(template_frame, text="", foreground="green")
+    def _setup_template_status_section(self, parent):
+        """
+        Setup template status section
+
+        Phase 3 Strangler Fig Pattern - Extracted method
+        """
+        self.template_status_label = ttk.Label(parent, text="", foreground="green")
         self.template_status_label.pack(fill=tk.X, padx=5, pady=2)
+
+        return self.template_status_label
+
+    def _setup_template_panel_refactored(self, parent):
+        """
+        Setup simplified template panel using extracted methods
+
+        Phase 3 Strangler Fig Pattern - New implementation
+        """
+        template_frame = ttk.LabelFrame(parent, text="➕ Crear Nuevo Logo")
+        template_frame.pack(fill=tk.X, pady=(0, 10))
+
+        # Setup each section using extracted methods
+        self._setup_template_info_section(template_frame)
+        self._setup_position_controls_section(template_frame)
+        self._setup_template_status_section(template_frame)
 
         # Initialize preset system
         self._initialize_preset_system()
@@ -384,51 +585,11 @@ class ConfigDesigner:
         self._update_design_options()
         self._update_save_path_preview()
 
-    def _scan_existing_presets(self):
-        """Scan configs directory for existing presets"""
-        configs_dir = os.path.join(os.path.dirname(__file__), "..", "..", "configs")
-        designs = set()
-        sizes = set()
-        parts = set()
-
-        if os.path.exists(configs_dir):
-            for design in os.listdir(configs_dir):
-                design_path = os.path.join(configs_dir, design)
-                if os.path.isdir(design_path):
-                    designs.add(design)
-
-                    for size in os.listdir(design_path):
-                        size_path = os.path.join(design_path, size)
-                        if os.path.isdir(size_path):
-                            sizes.add(size)
-
-                            for part_file in os.listdir(size_path):
-                                if part_file.endswith('.json'):
-                                    part = part_file[:-5]  # Remove .json
-                                    parts.add(part)
-
-        return sorted(designs), sorted(sizes), sorted(parts)
 
     def _update_design_options(self):
         """Update design dropdown with existing designs"""
-        designs, _, _ = self._scan_existing_presets()
+        designs, _, _ = self.preset_manager.scan_existing_presets()
         self.design_combo['values'] = designs
-
-    def _update_size_options(self):
-        """Update size dropdown based on selected design"""
-        design = self.design_var.get()
-        if not design:
-            self.size_combo['values'] = []
-            return
-
-        configs_dir = os.path.join(os.path.dirname(__file__), "..", "..", "configs")
-        design_path = os.path.join(configs_dir, design)
-        sizes = []
-
-        if os.path.exists(design_path):
-            sizes = [d for d in os.listdir(design_path) if os.path.isdir(os.path.join(design_path, d))]
-
-        self.size_combo['values'] = sorted(sizes)
 
     def _update_part_options(self):
         """Update part dropdown based on selected design and size"""
@@ -503,13 +664,6 @@ class ConfigDesigner:
             self._on_part_changed()
 
     # Event handlers for smart dropdowns
-    def _on_design_changed(self, event=None):
-        """Handle design selection change"""
-        self._update_size_options()
-        self.size_var.set("")  # Clear size when design changes
-        self.part_var.set("")  # Clear part when design changes
-        self._update_save_path_preview()
-
     def _on_design_typed(self, event=None):
         """Handle typing in design field"""
         self._update_save_path_preview()
@@ -546,15 +700,14 @@ class ConfigDesigner:
         # Update save path preview
         self._update_save_path_preview()
 
-    def _load_preset(self):
-        """Interactive preset loading with file browser"""
+    def _load_preset_file(self):
+        """Load and parse preset file data"""
         configs_dir = os.path.join(os.path.dirname(__file__), "..", "..", "configs")
 
         if not os.path.exists(configs_dir):
             messagebox.showwarning("Sin Presets", "No hay presets guardados aún.")
-            return
+            return None, None
 
-        # Open file dialog starting from configs directory
         config_path = filedialog.askopenfilename(
             title="Seleccionar Preset",
             initialdir=configs_dir,
@@ -562,35 +715,54 @@ class ConfigDesigner:
         )
 
         if not config_path:
-            return
+            return None, None
 
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config_data = json.load(f)
+            return config_data, config_path
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al cargar preset: {str(e)}")
+            return None, None
 
-            # Extract design/size/part from file path or config data
-            rel_path = os.path.relpath(config_path, configs_dir)
-            path_parts = rel_path.split(os.sep)
 
-            if len(path_parts) >= 3:
-                design = path_parts[0]
-                size = path_parts[1]
-                part = os.path.splitext(path_parts[2])[0]
-            else:
-                # Fallback: use data from config file
-                design = config_data.get('design', 'Unknown')
-                size = config_data.get('size', 'Unknown')
-                part = config_data.get('part', 'Unknown')
 
-            # Update UI dropdowns with loaded preset info
+    def _update_ui_after_preset_load(self, design, size, part, logos_count):
+        """Update UI elements after successful preset load"""
+        self._update_logo_list()
+        self._display_image()
+
+        # Update status
+        self.config_status_label.config(
+            text=f"✅ Preset cargado: {design}/{size}/{part} ({logos_count} logos)",
+            foreground="green"
+        )
+
+        messagebox.showinfo("Preset Cargado",
+                          f"Preset cargado exitosamente:\n\n" +
+                          f"📁 Diseño: {design}\n" +
+                          f"📏 Talla: {size}\n" +
+                          f"🧩 Parte: {part}\n" +
+                          f"🎯 Logos: {logos_count}")
+
+    def _load_preset(self):
+        """Interactive preset loading with file browser - Refactored for clarity"""
+        # Load preset file data
+        config_data, config_path = self._load_preset_file()
+        if not config_data or not config_path:
+            return
+
+        try:
+            # Extract metadata using PresetManager (Phase 3 Migration)
+            design, size, part = self.preset_manager.extract_preset_metadata(config_data, config_path)
+
+            # Update UI dropdowns
             self.design_var.set(design)
             self.size_var.set(size)
             self.part_var.set(part)
-
-            # Update dropdowns to reflect the loaded preset structure
             self._refresh_preset_dropdowns()
 
-            # Initialize style if needed
+            # Initialize or update style
             if not self.current_style:
                 self.current_style = Style(
                     id=f"{design}_{size}_{part}",
@@ -598,30 +770,14 @@ class ConfigDesigner:
                     logos=[]
                 )
 
-            # Load logos from config
-            self.current_style.logos.clear()
-            for logo_data in config_data.get('logos', []):
-                logo = Logo(
-                    id=logo_data['id'],
-                    name=logo_data['name'],
-                    position_mm=Point(logo_data['position_mm']['x'], logo_data['position_mm']['y']),
-                    tolerance_mm=logo_data.get('tolerance_mm', 3.0),
-                    detector_type=logo_data.get('detector_type', logo_data.get('detector', 'template_matching')),
-                    roi=Rectangle(
-                        logo_data['roi']['x'],
-                        logo_data['roi']['y'],
-                        logo_data['roi']['width'],
-                        logo_data['roi']['height']
-                    )
-                )
-                self.current_style.logos.append(logo)
+            # Load logos using PresetManager (Phase 3 Migration)
+            self.current_style.logos = self.preset_manager.create_logos_from_config(config_data)
 
             # Load calibration if available
             if 'calibration_factor' in config_data:
                 self.mm_per_pixel = config_data['calibration_factor']
 
-            # Initialize current_config to prevent fallback to default config
-            # This prevents the "chest pecho and sleeve manga" issue
+            # Initialize config if needed
             from alignpress_v2.config.models import AlignPressConfig, LibraryData
             if not self.current_config:
                 self.current_config = AlignPressConfig(library=LibraryData(styles=[]))
@@ -629,45 +785,69 @@ class ConfigDesigner:
             # Ensure the loaded style is in the config
             self.current_config.library.styles = [self.current_style]
 
-            # Update UI
-            self._update_logo_list()
-            self._display_image()
-
-            # Update status
-            self.config_status_label.config(
-                text=f"✅ Preset cargado: {design}/{size}/{part} ({len(self.current_style.logos)} logos)",
-                foreground="green"
-            )
-
             # Update current configuration variables
             self.current_design = design
             self.current_size = size
             self.current_part = part
 
-            messagebox.showinfo("Preset Cargado",
-                              f"Preset cargado exitosamente:\n\n" +
-                              f"📁 Diseño: {design}\n" +
-                              f"📏 Talla: {size}\n" +
-                              f"🧩 Parte: {part}\n" +
-                              f"🎯 Logos: {len(self.current_style.logos)}")
+            # Update UI
+            self._update_ui_after_preset_load(design, size, part, len(self.current_style.logos))
 
         except Exception as e:
             messagebox.showerror("Error", f"Error al cargar preset: {str(e)}")
 
+
+    def _prepare_preset_config_data(self, design, size, part):
+        """Prepare configuration data for saving"""
+        config_data = {
+            "design": design,
+            "size": size,
+            "part": part,
+            "calibration_factor": self.mm_per_pixel,
+            "logos": []
+        }
+
+        # Convert logos to dict format
+        for logo in self.current_style.logos:
+            logo_data = {
+                "id": logo.id,
+                "name": logo.name,
+                "position_mm": {"x": logo.position_mm.x, "y": logo.position_mm.y},
+                "roi": {
+                    "x": logo.roi.x,
+                    "y": logo.roi.y,
+                    "width": logo.roi.width,
+                    "height": logo.roi.height
+                },
+                "tolerance_mm": logo.tolerance_mm,
+                "detector": logo.detector_type
+            }
+            config_data["logos"].append(logo_data)
+
+        return config_data
+
+    def _update_ui_after_preset_save(self, design, size, part, config_path):
+        """Update UI after successful preset save"""
+        # Update dropdowns
+        self._update_design_options()
+        self._update_size_options()
+        self._update_part_options()
+
+        self.config_status_label.config(
+            text=f"✅ Preset guardado: {design}/{size}/{part} ({len(self.current_style.logos)} logos)",
+            foreground="green"
+        )
+
+        messagebox.showinfo("Éxito", f"Preset guardado correctamente en:\n{config_path}")
+
     def _save_preset(self):
-        """Save current configuration as preset"""
+        """Save current configuration as preset - Refactored for clarity"""
         design = self.design_var.get()
         size = self.size_var.get()
         part = self.part_var.get()
 
-        if not design or not size or not part:
-            messagebox.showwarning("Configuración Incompleta",
-                                 "Selecciona Diseño, Talla y Parte para guardar el preset.")
-            return
-
-        if not self.current_style or not self.current_style.logos:
-            messagebox.showwarning("Sin Logos",
-                                 "Agrega al menos un logo antes de guardar el preset.")
+        # Validate input data using PresetManager (Phase 3 Migration)
+        if not self.preset_manager.validate_preset_data(design, size, part, self.current_style):
             return
 
         # Create directory structure
@@ -677,62 +857,270 @@ class ConfigDesigner:
 
         config_path = os.path.join(preset_dir, f"{part}.json")
 
-        # Check if file exists
+        # Check if file exists and confirm overwrite
         if os.path.exists(config_path):
             if not messagebox.askyesno("Sobrescribir",
                                      f"El preset {design}/{size}/{part} ya existe.\n\n¿Quieres sobrescribirlo?"):
                 return
 
         try:
-            # Prepare config data
-            config_data = {
-                "design": design,
-                "size": size,
-                "part": part,
-                "calibration_factor": self.mm_per_pixel,
-                "logos": []
-            }
+            # Prepare and save config data
+            config_data = self._prepare_preset_config_data(design, size, part)
 
-            # Add logos
-            for logo in self.current_style.logos:
-                logo_data = {
-                    "id": logo.id,
-                    "name": logo.name,
-                    "position_mm": {"x": logo.position_mm.x, "y": logo.position_mm.y},
-                    "roi": {
-                        "x": logo.roi.x,
-                        "y": logo.roi.y,
-                        "width": logo.roi.width,
-                        "height": logo.roi.height
-                    },
-                    "tolerance_mm": logo.tolerance_mm,
-                    "detector": logo.detector_type
-                }
-                config_data["logos"].append(logo_data)
-
-            # Save to file
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(config_data, f, indent=2, ensure_ascii=False)
 
-            # Update dropdowns
-            self._update_design_options()
-            self._update_size_options()
-            self._update_part_options()
-
-            self.config_status_label.config(
-                text=f"✅ Preset guardado: {design}/{size}/{part} ({len(self.current_style.logos)} logos)",
-                foreground="green"
-            )
-
-            messagebox.showinfo("Éxito", f"Preset guardado correctamente en:\n{config_path}")
+            # Update UI after successful save
+            self._update_ui_after_preset_save(design, size, part, config_path)
 
         except Exception as e:
             messagebox.showerror("Error", f"Error al guardar preset: {str(e)}")
 
+    # New methods using specialized managers - Phase 2 Architecture
+
+    def _load_preset_with_manager(self):
+        """Load preset using PresetManager"""
+        try:
+            config_data, config_path = self.preset_manager.load_preset_file()
+            if not config_data or not config_path:
+                return
+
+            # Extract metadata
+            design, size, part = self.preset_manager.extract_preset_metadata(
+                config_data, config_path
+            )
+
+            # Update UI variables
+            self.ui_manager.set_variable_value("design", design)
+            self.ui_manager.set_variable_value("size", size)
+            self.ui_manager.set_variable_value("part", part)
+
+            # Update current state
+            self.current_design = design
+            self.current_size = size
+            self.current_part = part
+
+            # Create/update style
+            if not self.current_style:
+                self.current_style = Style(
+                    id=f"{design}_{size}_{part}",
+                    name=f"{design} {size} {part}",
+                    logos=[]
+                )
+
+            # Load logos using PresetManager
+            self.current_style.logos = self.preset_manager.create_logos_from_config(config_data)
+
+            # Load calibration
+            if 'calibration_factor' in config_data:
+                self.mm_per_pixel = config_data['calibration_factor']
+
+            # Initialize config if needed
+            from ..config.models import AlignPressConfig, LibraryData
+            if not self.current_config:
+                self.current_config = AlignPressConfig(library=LibraryData(styles=[]))
+
+            self.current_config.library.styles = [self.current_style]
+
+            # Update UI
+            self._update_ui_after_preset_load_new(design, size, part, len(self.current_style.logos))
+
+        except Exception as e:
+            self.ui_manager.show_error_message("Error", f"Error al cargar preset: {str(e)}")
+
+    def _save_preset_with_manager(self):
+        """Save preset using PresetManager"""
+        design = self.ui_manager.get_variable_value("design")
+        size = self.ui_manager.get_variable_value("size")
+        part = self.ui_manager.get_variable_value("part")
+
+        if self.preset_manager.save_preset(design, size, part, self.current_style, self.mm_per_pixel):
+            # Update UI after successful save
+            self._update_dropdowns_after_save()
+            self.ui_manager.update_config_status(
+                f"✅ Preset guardado: {design}/{size}/{part} ({len(self.current_style.logos)} logos)",
+                "green"
+            )
+
+    def _update_ui_after_preset_load_new(self, design: str, size: str, part: str, logos_count: int):
+        """Update UI after preset load using new architecture"""
+        # Update logo list
+        if self.current_style:
+            self.ui_manager.update_logo_list(self.current_style.logos)
+
+        # Update image display
+        self._display_image_with_processor()
+
+        # Update status
+        self.ui_manager.update_config_status(
+            f"✅ Preset cargado: {design}/{size}/{part} ({logos_count} logos)",
+            "green"
+        )
+
+        # Show info message
+        self.ui_manager.show_info_message(
+            "Preset Cargado",
+            f"Preset cargado exitosamente:\n\n"
+            f"📁 Diseño: {design}\n"
+            f"📏 Talla: {size}\n"
+            f"🧩 Parte: {part}\n"
+            f"🎯 Logos: {logos_count}"
+        )
+
+    def _display_image_with_processor(self):
+        """Display image using ImageProcessor"""
+        if self.image_processor.current_image is None:
+            return
+
+        # Prepare image for display
+        photo_image = self.image_processor.prepare_image_for_canvas()
+        if photo_image and self.image_canvas:
+            # Clear canvas
+            self.image_canvas.delete("all")
+
+            # Initialize ruler/grid system if not exists
+            if not self.ruler_grid_system:
+                self.ruler_grid_system = RulerGridSystem(self.image_canvas)
+                self.ruler_grid_system.set_visibility(
+                    self.rulers_var.get(),
+                    self.grid_var.get()
+                )
+
+            # Get canvas dimensions
+            canvas_width = photo_image.width()
+            canvas_height = photo_image.height()
+
+            # Draw rulers and grid
+            self.ruler_grid_system.draw_rulers_and_grid(
+                canvas_width, canvas_height,
+                self.mm_per_pixel, self.canvas_scale
+            )
+
+            # Get ruler offset
+            offset_x, offset_y = self.ruler_grid_system.get_ruler_offset()
+
+            # Display image with offset
+            self.image_canvas.create_image(
+                offset_x, offset_y,
+                image=photo_image, anchor="nw"
+            )
+
+            # Draw logos
+            self._draw_logos_with_processor()
+
+            # Update scroll region
+            total_width = canvas_width + offset_x
+            total_height = canvas_height + offset_y
+            self.ruler_grid_system.adjust_canvas_scroll_region(total_width, total_height)
+
+    def _draw_logos_with_processor(self):
+        """Draw logos using ImageProcessor calculations"""
+        if not self.current_style or not self.ruler_grid_system:
+            return
+
+        # Clear existing markers
+        for marker_id in self.position_markers.values():
+            if isinstance(marker_id, list):
+                for mid in marker_id:
+                    self.image_canvas.delete(mid)
+            else:
+                self.image_canvas.delete(marker_id)
+
+        for rect_id in self.roi_rectangles.values():
+            self.image_canvas.delete(rect_id)
+
+        self.position_markers.clear()
+        self.roi_rectangles.clear()
+
+        # Draw each logo using ImageProcessor
+        for logo in self.current_style.logos:
+            self._draw_single_logo_with_processor(logo)
+
+    def _draw_single_logo_with_processor(self, logo: Logo):
+        """Draw single logo using ImageProcessor"""
+        # Get position and ROI using ImageProcessor
+        pos_x, pos_y = self.image_processor.calculate_logo_canvas_position(logo, self.mm_per_pixel)
+        roi_x, roi_y, roi_w, roi_h = self.image_processor.calculate_logo_roi_canvas(logo, self.mm_per_pixel)
+
+        # Adjust for ruler offset
+        offset_x, offset_y = self.ruler_grid_system.get_ruler_offset()
+        pos_x += offset_x
+        pos_y += offset_y
+        roi_x += offset_x
+        roi_y += offset_y
+
+        # Determine if logo is selected
+        is_selected = (self.editing_mode == "logo" and
+                      self.selected_logo_index is not None and
+                      self.current_style and
+                      self.selected_logo_index < len(self.current_style.logos) and
+                      logo == self.current_style.logos[self.selected_logo_index])
+
+        color = "orange" if is_selected else "blue"
+        width = 3 if is_selected else 2
+        size = 10
+
+        # Draw crosshair
+        line1 = self.image_canvas.create_line(
+            pos_x - size, pos_y, pos_x + size, pos_y,
+            fill=color, width=width, tags=f"logo_{logo.id}"
+        )
+        line2 = self.image_canvas.create_line(
+            pos_x, pos_y - size, pos_x, pos_y + size,
+            fill=color, width=width, tags=f"logo_{logo.id}"
+        )
+
+        # Draw ROI rectangle
+        rect = self.image_canvas.create_rectangle(
+            roi_x, roi_y, roi_x + roi_w, roi_y + roi_h,
+            outline=color, width=width, tags=f"logo_{logo.id}"
+        )
+
+        # Draw text label
+        text = self.image_canvas.create_text(
+            pos_x + 15, pos_y - 15,
+            text=logo.name, fill=color, font=("Arial", 9),
+            tags=f"logo_{logo.id}"
+        )
+
+        self.position_markers[logo.id] = [line1, line2, text]
+        self.roi_rectangles[logo.id] = rect
+
+    def _toggle_rulers(self):
+        """Toggle rulers using RulerGridSystem"""
+        if self.ruler_grid_system:
+            show_rulers = self.rulers_var.get()
+            show_grid = self.grid_var.get()
+            self.ruler_grid_system.set_visibility(show_rulers, show_grid)
+            self._display_image_with_processor()
+
+    def _toggle_grid(self):
+        """Toggle grid using RulerGridSystem"""
+        if self.ruler_grid_system:
+            show_rulers = self.rulers_var.get()
+            show_grid = self.grid_var.get()
+            self.ruler_grid_system.set_visibility(show_rulers, show_grid)
+            self._display_image_with_processor()
+
+    def _update_dropdowns_after_save(self):
+        """Update dropdowns after saving preset"""
+        designs, sizes, parts = self.preset_manager.scan_existing_presets()
+        self.ui_manager.update_dropdown_values("design_combo", designs)
+        self.ui_manager.update_dropdown_values("size_combo", sizes)
+        self.ui_manager.update_dropdown_values("part_combo", parts)
+
+    def _generate_variants_with_generator(self):
+        """Generate variants using VariantGenerator - Phase 3 Strangler Fig Pattern"""
+        success = self.variant_generator.generate_variants_dialog(
+            self.current_style, self.current_config
+        )
+        if success:
+            logger.info("Variants generated successfully using new architecture")
+
     def _load_image(self):
-        """Load an image for configuration"""
+        """Load an image for configuration using ImageProcessor"""
         if not CV2_AVAILABLE:
-            messagebox.showerror("Error", "OpenCV no disponible")
+            self.ui_manager.show_error_message("Error", "OpenCV no disponible")
             return
 
         filename = filedialog.askopenfilename(
@@ -744,28 +1132,24 @@ class ConfigDesigner:
         )
 
         if filename:
-            try:
-                # Clear previous image references to prevent memory issues
-                self.photo_image = None
-                self.preview_images.clear()
+            if self.image_processor.load_image(filename):
+                # Copy image reference and scale for compatibility
+                self.current_image = self.image_processor.current_image
+                self.canvas_scale = getattr(self.image_processor, 'canvas_scale', 1.0)
 
-                # Load new image
-                self.current_image = cv2.imread(filename)
-                if self.current_image is None:
-                    raise ValueError("No se pudo cargar la imagen")
+                # Display image
+                self._display_image_with_processor()
 
-                # Validate image
-                if self.current_image.size == 0:
-                    raise ValueError("La imagen está vacía")
-
-                self._display_image()
                 logger.info(f"Imagen cargada: {filename}")
-                messagebox.showinfo("Éxito", f"Imagen cargada correctamente\nResolución: {self.current_image.shape[1]}x{self.current_image.shape[0]}")
-
-            except Exception as e:
-                error_msg = f"Error cargando imagen: {e}"
-                logger.error(error_msg)
-                messagebox.showerror("Error", error_msg)
+                dimensions = self.image_processor.get_image_dimensions()
+                if dimensions:
+                    width, height = dimensions
+                    self.ui_manager.show_info_message(
+                        "Éxito",
+                        f"Imagen cargada correctamente\nResolución: {width}x{height}"
+                    )
+            else:
+                self.ui_manager.show_error_message("Error", "No se pudo cargar la imagen")
 
     def _display_image(self):
         """Display current image on canvas (with template overlay if active)"""
@@ -774,7 +1158,7 @@ class ConfigDesigner:
 
         # If template is active, use template overlay method
         if self.selected_template_id:
-            self._update_image_with_template()
+            self._update_image_with_template_overlay_manager()
         else:
             # Display plain image
             self._display_processed_image(self.current_image)
@@ -1210,141 +1594,6 @@ class ConfigDesigner:
                 messagebox.showerror("Error", f"Error exportando imagen: {e}")
                 logger.error(f"Error exporting debug image: {e}")
 
-    def _generate_variants(self):
-        """Generate size variants automatically"""
-        if not self.current_style:
-            messagebox.showwarning("Advertencia", "Crear estilo base primero")
-            return
-
-        # Create variants window
-        variant_window = tk.Toplevel(self.root)
-        variant_window.title("Generar Variantes de Talla")
-        variant_window.geometry("400x300")
-
-        main_frame = ttk.Frame(variant_window)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Size selection
-        ttk.Label(main_frame, text="Seleccionar tallas a generar:").pack(anchor=tk.W)
-
-        sizes = ["XS", "S", "M", "L", "XL", "XXL"]
-        size_vars = {}
-
-        for size in sizes:
-            var = tk.BooleanVar(value=True if size in ["S", "M", "L"] else False)
-            size_vars[size] = var
-            ttk.Checkbutton(main_frame, text=size, variable=var).pack(anchor=tk.W)
-
-        ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-
-        # Scaling parameters
-        ttk.Label(main_frame, text="Factores de escala (relativo a M):").pack(anchor=tk.W)
-
-        scale_frame = ttk.Frame(main_frame)
-        scale_frame.pack(fill=tk.X, pady=5)
-
-        ttk.Label(scale_frame, text="XS:").grid(row=0, column=0, sticky=tk.W)
-        xs_scale = tk.StringVar(value="0.85")
-        ttk.Entry(scale_frame, textvariable=xs_scale, width=8).grid(row=0, column=1, padx=5)
-
-        ttk.Label(scale_frame, text="S:").grid(row=0, column=2, sticky=tk.W, padx=(15, 0))
-        s_scale = tk.StringVar(value="0.92")
-        ttk.Entry(scale_frame, textvariable=s_scale, width=8).grid(row=0, column=3, padx=5)
-
-        ttk.Label(scale_frame, text="L:").grid(row=1, column=0, sticky=tk.W)
-        l_scale = tk.StringVar(value="1.08")
-        ttk.Entry(scale_frame, textvariable=l_scale, width=8).grid(row=1, column=1, padx=5)
-
-        ttk.Label(scale_frame, text="XL:").grid(row=1, column=2, sticky=tk.W, padx=(15, 0))
-        xl_scale = tk.StringVar(value="1.15")
-        ttk.Entry(scale_frame, textvariable=xl_scale, width=8).grid(row=1, column=3, padx=5)
-
-        ttk.Label(scale_frame, text="XXL:").grid(row=2, column=0, sticky=tk.W)
-        xxl_scale = tk.StringVar(value="1.25")
-        ttk.Entry(scale_frame, textvariable=xxl_scale, width=8).grid(row=2, column=1, padx=5)
-
-        scale_vars = {
-            "XS": xs_scale, "S": s_scale, "M": tk.StringVar(value="1.00"),
-            "L": l_scale, "XL": xl_scale, "XXL": xxl_scale
-        }
-
-        def generate_variants():
-            """Generate the variants based on selections"""
-            try:
-                if not self.current_config:
-                    self.current_config = create_default_config()
-
-                # Remove existing variants for this style
-                self.current_config.library.variants = [
-                    v for v in self.current_config.library.variants
-                    if v.base_style_id != self.current_style.id
-                ]
-
-                base_logos = self.current_style.logos.copy()
-
-                for size, var in size_vars.items():
-                    if not var.get():
-                        continue
-
-                    try:
-                        scale_factor = float(scale_vars[size].get())
-                    except ValueError:
-                        messagebox.showerror("Error", f"Factor de escala inválido para {size}")
-                        return
-
-                    # Create scaled logos
-                    scaled_logos = []
-                    for logo in base_logos:
-                        scaled_logo = Logo(
-                            id=logo.id,
-                            name=logo.name,
-                            position_mm=Point(
-                                logo.position_mm.x * scale_factor,
-                                logo.position_mm.y * scale_factor
-                            ),
-                            tolerance_mm=logo.tolerance_mm * scale_factor,
-                            detector_type=logo.detector_type,
-                            roi=Rectangle(
-                                logo.roi.x * scale_factor,
-                                logo.roi.y * scale_factor,
-                                logo.roi.width * scale_factor,
-                                logo.roi.height * scale_factor
-                            )
-                        )
-                        scaled_logos.append(scaled_logo)
-
-                    # Create variant
-                    variant = Variant(
-                        id=f"{self.current_style.id}_{size.lower()}",
-                        name=f"{self.current_style.name} - {size}",
-                        base_style_id=self.current_style.id,
-                        size_category=size.lower(),
-                        logos=scaled_logos
-                    )
-
-                    self.current_config.library.variants.append(variant)
-
-                variant_window.destroy()
-
-                count = sum(1 for var in size_vars.values() if var.get())
-                messagebox.showinfo("Éxito",
-                    f"Se generaron {count} variantes de talla\n"
-                    f"Guarda la configuración para conservar los cambios")
-
-                logger.info(f"Generated {count} size variants for style {self.current_style.id}")
-
-            except Exception as e:
-                messagebox.showerror("Error", f"Error generando variantes: {e}")
-                logger.error(f"Error generating variants: {e}")
-
-        # Buttons
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill=tk.X, pady=(10, 0))
-
-        ttk.Button(button_frame, text="Generar",
-                  command=generate_variants).pack(side=tk.RIGHT, padx=(10, 0))
-        ttk.Button(button_frame, text="Cancelar",
-                  command=variant_window.destroy).pack(side=tk.RIGHT)
 
     def _test_detection(self):
         """Test detection with current configuration"""
@@ -1839,7 +2088,7 @@ class ConfigDesigner:
         self.template_position = (center_x, center_y)
 
         # Update the display
-        self._update_image_with_template()
+        self._update_image_with_template_overlay_manager()
 
         # Update numeric fields
         self._update_position_fields()
@@ -1857,102 +2106,46 @@ class ConfigDesigner:
             foreground="blue"
         )
 
-    def _update_image_with_template(self):
-        """Update the canvas display with template overlay"""
+    def _update_image_with_template_overlay_manager(self):
+        """
+        Update the canvas display with template overlay using TemplateOverlayManager
+
+        Phase 3 Strangler Fig Pattern - New implementation
+        """
         if self.current_image is None:
             return
 
-        # Start with original image
-        display_image = self.current_image.copy()
+        try:
+            # Check if template overlay is needed
+            if not self.selected_template_id or self.selected_template_id not in self.logo_templates:
+                # No template selected, just display original image
+                self._display_processed_image(self.current_image)
+                return
 
-        # Add template overlay if active
-        if self.selected_template_id and self.selected_template_id in self.logo_templates:
-            template = self.logo_templates[self.selected_template_id]
+            # Get template image
+            template_image = self.logo_templates[self.selected_template_id]
 
-            # Convert template to same color space as image
-            if len(template.shape) == 3 and template.shape[2] == 4:  # RGBA/BGRA
-                template_rgb = cv2.cvtColor(template, cv2.COLOR_BGRA2BGR)
-            elif len(template.shape) == 3 and template.shape[2] == 3:  # Already BGR/RGB
-                template_rgb = template
-            else:  # Grayscale or other format
-                if len(template.shape) == 2:  # Grayscale
-                    template_rgb = cv2.cvtColor(template, cv2.COLOR_GRAY2BGR)
-                else:
-                    template_rgb = template
+            # Apply template overlay using the specialized manager
+            display_image = self.template_overlay_manager.apply_template_overlay(
+                base_image=self.current_image.copy(),
+                template_id=self.selected_template_id,
+                template_image=template_image,
+                template_position=self.template_position,
+                mm_per_pixel=self.mm_per_pixel,
+                template_references=self.template_references
+            )
 
-            # Calculate template size using real-world calibration
-            template_height, template_width = template_rgb.shape[:2]
+            # Update stored template size from manager
+            self.template_size = self.template_overlay_manager.get_template_size()
+            self.template_size_mm = self.template_overlay_manager.get_template_size_mm()
 
-            # Use real-world scaling if calibration is available
-            if self.mm_per_pixel > 0:
-                # Get template info to determine real size
-                template_info = self.template_references.get(self.selected_template_id, {})
+            # Display the final image
+            self._display_processed_image(display_image)
 
-                # If template has defined size in mm, use it; otherwise estimate reasonable size
-                if 'size_mm' in template_info:
-                    target_width_mm, target_height_mm = template_info['size_mm']
-                else:
-                    # Default logo size: 30mm x 30mm (reasonable for typical logo)
-                    target_width_mm = 30.0
-                    target_height_mm = 30.0
-
-                # Convert mm to pixels using calibration
-                new_width = int(target_width_mm / self.mm_per_pixel)
-                new_height = int(target_height_mm / self.mm_per_pixel)
-
-                # Store both pixel and mm sizes
-                self.template_size = (new_width, new_height)
-                self.template_size_mm = (target_width_mm, target_height_mm)
-
-            else:
-                # Fallback to reasonable pixel size if no calibration
-                img_height, img_width = display_image.shape[:2]
-                max_size = min(100, img_width // 8, img_height // 8)
-
-                if max(template_width, template_height) > max_size:
-                    scale = max_size / max(template_width, template_height)
-                    new_width = int(template_width * scale)
-                    new_height = int(template_height * scale)
-                    self.template_size = (new_width, new_height)
-                else:
-                    self.template_size = (template_width, template_height)
-
-                # Estimate mm size
-                self.template_size_mm = (self.template_size[0] * self.mm_per_pixel,
-                                       self.template_size[1] * self.mm_per_pixel)
-
-            # Resize template to calculated size
-            template_rgb = cv2.resize(template_rgb, self.template_size)
-
-            # Position template (centered on template_position)
-            pos_x = self.template_position[0] - self.template_size[0] // 2
-            pos_y = self.template_position[1] - self.template_size[1] // 2
-
-            # Ensure template stays within image bounds
-            pos_x = max(0, min(pos_x, display_image.shape[1] - self.template_size[0]))
-            pos_y = max(0, min(pos_y, display_image.shape[0] - self.template_size[1]))
-
-            # Create semi-transparent overlay
-            try:
-                overlay = display_image.copy()
-                template_area = overlay[pos_y:pos_y+self.template_size[1], pos_x:pos_x+self.template_size[0]]
-
-                # Validate areas match before blending
-                if (template_area.shape[:2] == template_rgb.shape[:2] and
-                    template_area.shape[2] == template_rgb.shape[2]):
-                    # Blend template with background (semi-transparent)
-                    alpha = 0.7
-                    cv2.addWeighted(template_rgb, alpha, template_area, 1-alpha, 0, template_area)
-                    display_image = overlay
-                else:
-                    logger.warning(f"Template shape mismatch: template={template_rgb.shape}, area={template_area.shape}")
-
-            except Exception as e:
-                logger.error(f"Error creating template overlay: {e}")
-                # Continue with original image if overlay fails
-
-        # Update canvas display
-        self._display_processed_image(display_image)
+        except Exception as e:
+            logger.error(f"Error updating image with template overlay manager: {e}")
+            # Fallback to original image
+            self._display_processed_image(self.current_image)
 
     def _display_processed_image(self, image):
         """Display processed image on canvas"""
@@ -2222,7 +2415,7 @@ class ConfigDesigner:
         self.template_position = (img_x, img_y)
 
         # Update display
-        self._update_image_with_template()
+        self._update_image_with_template_overlay_manager()
 
         # Update position fields in real time
         self._update_position_fields()
@@ -2401,7 +2594,7 @@ class ConfigDesigner:
                 pos_x_img = int(pos_x_mm / self.mm_per_pixel)
                 pos_y_img = int(pos_y_mm / self.mm_per_pixel)
                 self.template_position = (pos_x_img, pos_y_img)
-                self._update_image_with_template()
+                self._update_image_with_template_overlay_manager()
 
             elif self.editing_mode == "logo" and self.selected_logo_index is not None:
                 # Update selected logo position
@@ -2441,7 +2634,7 @@ class ConfigDesigner:
                 self.template_size_mm = (width_mm, height_mm)
 
                 # Update display
-                self._update_image_with_template()
+                self._update_image_with_template_overlay_manager()
 
                 # Update size display
                 self.template_size_label.config(text=f"{width_px}×{height_px}px")
@@ -2476,7 +2669,7 @@ class ConfigDesigner:
         self.template_position = (center_x, center_y)
 
         # Update display and fields
-        self._update_image_with_template()
+        self._update_image_with_template_overlay_manager()
         self._update_position_fields()
 
         self.template_status_label.config(text="📍 Template centrado", foreground="green")
@@ -2585,8 +2778,8 @@ class ConfigDesigner:
             self.mm_per_pixel = 1.0
 
         # Calculate spacing with minimum limits
-        ruler_spacing_px = max(20, self.ruler_spacing_mm / self.mm_per_pixel * self.canvas_scale)
-        grid_spacing_px = max(15, self.grid_spacing_mm / self.mm_per_pixel * self.canvas_scale)
+        ruler_spacing_px = max(self.MIN_RULER_SPACING, self.ruler_spacing_mm / self.mm_per_pixel * self.canvas_scale)
+        grid_spacing_px = max(self.MIN_GRID_SPACING, self.grid_spacing_mm / self.mm_per_pixel * self.canvas_scale)
 
         # Draw grid first (background)
         if self.grid_var.get():
@@ -2630,7 +2823,7 @@ class ConfigDesigner:
         while x < canvas_width:
             self.image_canvas.create_line(
                 x, 0, x, canvas_height,
-                fill="#DDDDDD", width=1, tags="grid"
+                fill=self.GRID_COLOR, width=1, tags="grid"
             )
             x += spacing_px
 
@@ -2638,7 +2831,7 @@ class ConfigDesigner:
         while y < canvas_height:
             self.image_canvas.create_line(
                 0, y, canvas_width, y,
-                fill="#DDDDDD", width=1, tags="grid"
+                fill=self.GRID_COLOR, width=1, tags="grid"
             )
             y += spacing_px
 
@@ -2646,14 +2839,14 @@ class ConfigDesigner:
         """Simple rulers drawing"""
         # Top ruler
         self.image_canvas.create_rectangle(
-            0, 0, canvas_width, 25,
-            fill="#F5F5F5", outline="#999999", width=1, tags="ruler"
+            0, 0, canvas_width, self.RULER_HEIGHT,
+            fill=self.RULER_BG_COLOR, outline=self.RULER_BORDER_COLOR, width=1, tags="ruler"
         )
 
         # Left ruler
         self.image_canvas.create_rectangle(
-            0, 0, 35, canvas_height,
-            fill="#F5F5F5", outline="#999999", width=1, tags="ruler"
+            0, 0, self.RULER_WIDTH, canvas_height,
+            fill=self.RULER_BG_COLOR, outline=self.RULER_BORDER_COLOR, width=1, tags="ruler"
         )
 
         # Ruler marks - horizontal
@@ -2785,6 +2978,63 @@ class ConfigDesigner:
         if self.tooltip_label:
             self.tooltip_label.destroy()
             self.tooltip_label = None
+
+    def _add_logo_dialog(self):
+        """Add a new logo through dialog"""
+        if not self.current_style:
+            messagebox.showwarning("Advertencia", "Crear estilo base primero")
+            return
+
+        # Simple dialog for logo name
+        logo_name = simpledialog.askstring("Nuevo Logo", "Nombre del logo:")
+        if not logo_name:
+            return
+
+        # Create default logo
+        new_logo = Logo(
+            id=f"logo_{len(self.current_style.logos) + 1}",
+            name=logo_name,
+            position_mm=Point(50.0, 50.0),  # Default position
+            tolerance_mm=5.0,
+            detector_type="template_match",
+            roi=Rectangle(40.0, 40.0, 20.0, 20.0)  # Default ROI
+        )
+
+        self.current_style.logos.append(new_logo)
+        self._update_logo_list()
+        messagebox.showinfo("Éxito", f"Logo '{logo_name}' agregado")
+
+    def _remove_logo(self):
+        """Remove selected logo"""
+        if not self.logo_list or not self.current_style:
+            return
+
+        selection = self.logo_list.curselection()
+        if not selection:
+            messagebox.showwarning("Advertencia", "Selecciona un logo para eliminar")
+            return
+
+        index = selection[0]
+        logo = self.current_style.logos[index]
+
+        # Confirm deletion
+        result = messagebox.askyesno("Confirmar", f"¿Eliminar logo '{logo.name}'?")
+        if result:
+            self.current_style.logos.pop(index)
+            self._update_logo_list()
+            messagebox.showinfo("Éxito", f"Logo '{logo.name}' eliminado")
+
+    def _update_logo_list(self):
+        """Update the logo list display"""
+        if not self.logo_list:
+            return
+
+        self.logo_list.delete(0, tk.END)
+
+        if self.current_style:
+            for logo in self.current_style.logos:
+                display_text = f"{logo.name} ({logo.position_mm.x:.1f}, {logo.position_mm.y:.1f}mm)"
+                self.logo_list.insert(tk.END, display_text)
 
 
 def main():
