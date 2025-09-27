@@ -30,21 +30,21 @@
     "platens": [],
     "styles": [
       {
-        "id": "Comunicaciones Corinta_Talla S_Delantera",
-        "name": "Comunicaciones Corinta Talla S Delantera",
+        "id": "__",
+        "name": "  ",
         "logos": [
           {
             "id": "logo_1",
             "name": "Logo comunicaciones.png",
             "position_mm": {
-              "x": 408.343249976635,
-              "y": 126.59346005320549
+              "x": 394.94338512420654,
+              "y": 174.19824308156967
             },
             "tolerance_mm": 5.0,
             "detector_type": "template_matching",
             "roi": {
-              "x": 390.7118488550186,
-              "y": 113.3684600532055,
+              "x": 377.3119840025902,
+              "y": 160.97324308156968,
               "width": 35.26280224323273,
               "height": 26.45
             },
@@ -55,14 +55,14 @@
             "id": "logo_2",
             "name": "Logo gulf.png",
             "position_mm": {
-              "x": 208.0505332350731,
-              "y": 220.74514204263687
+              "x": 154.45107382535934,
+              "y": 217.2188618183136
             },
             "tolerance_mm": 5.0,
             "detector_type": "template_matching",
             "roi": {
-              "x": 190.41913211345673,
-              "y": 203.11514204263688,
+              "x": 136.81967270374298,
+              "y": 199.5888618183136,
               "width": 35.26280224323273,
               "height": 35.26
             },
@@ -73,14 +73,14 @@
             "id": "logo_3",
             "name": "Logo gana.png",
             "position_mm": {
-              "x": 292.68125861883163,
-              "y": 312.43
+              "x": 248.60275581479073,
+              "y": 339.23
             },
             "tolerance_mm": 5.0,
             "detector_type": "template_matching",
             "roi": {
-              "x": 275.04985749721527,
-              "y": 294.8,
+              "x": 230.97135469317436,
+              "y": 321.6,
               "width": 35.26280224323273,
               "height": 35.26
             },

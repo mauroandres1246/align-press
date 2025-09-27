@@ -69,6 +69,12 @@ class ConfigDesigner:
         self.template_size_mm: Tuple[float, float] = (50.0, 50.0)  # Template size in mm
         self.updating_from_drag: bool = False  # Prevent circular updates
 
+        # Visual enhancement settings
+        self.show_rulers: bool = True  # Show horizontal and vertical rulers
+        self.show_grid: bool = True   # Show grid overlay
+        self.grid_spacing_mm: float = 10.0  # Grid spacing in mm (increased from 5.0)
+        self.ruler_spacing_mm: float = 10.0  # Ruler marks spacing in mm
+
         # Mouse interaction state
         self.is_dragging: bool = False
         self.drag_start_pos: Optional[Tuple[int, int]] = None
@@ -151,6 +157,17 @@ class ConfigDesigner:
         ttk.Button(toolbar, text="Ajustar Zoom",
                   command=self._fit_image).pack(side=tk.LEFT, padx=(0, 5))
 
+        # Visual enhancements controls
+        ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=5, fill=tk.Y)
+
+        self.rulers_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(toolbar, text="Reglas", variable=self.rulers_var,
+                       command=self._toggle_rulers).pack(side=tk.LEFT, padx=(0, 5))
+
+        self.grid_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(toolbar, text="Grid", variable=self.grid_var,
+                       command=self._toggle_grid).pack(side=tk.LEFT, padx=(0, 5))
+
         # Calibration status
         self.calibration_label = ttk.Label(toolbar, text="Sin calibración", foreground="red")
         self.calibration_label.pack(side=tk.RIGHT, padx=(10, 0))
@@ -173,6 +190,10 @@ class ConfigDesigner:
         self.image_canvas.bind("<Button-1>", self._on_canvas_click)
         self.image_canvas.bind("<B1-Motion>", self._on_canvas_drag)
         self.image_canvas.bind("<ButtonRelease-1>", self._on_canvas_release)
+        self.image_canvas.bind("<Motion>", self._on_canvas_motion)
+
+        # Tooltip for dimensions
+        self.tooltip_label = None
 
     def _setup_config_panel(self, parent):
         """Setup configuration panel"""
@@ -1859,19 +1880,49 @@ class ConfigDesigner:
                 else:
                     template_rgb = template
 
-            # Calculate template size (scale to reasonable size)
+            # Calculate template size using real-world calibration
             template_height, template_width = template_rgb.shape[:2]
-            img_height, img_width = display_image.shape[:2]
-            max_size = min(100, img_width // 8, img_height // 8)  # Reasonable size
 
-            if max(template_width, template_height) > max_size:
-                scale = max_size / max(template_width, template_height)
-                new_width = int(template_width * scale)
-                new_height = int(template_height * scale)
-                template_rgb = cv2.resize(template_rgb, (new_width, new_height))
+            # Use real-world scaling if calibration is available
+            if self.mm_per_pixel > 0:
+                # Get template info to determine real size
+                template_info = self.template_references.get(self.selected_template_id, {})
+
+                # If template has defined size in mm, use it; otherwise estimate reasonable size
+                if 'size_mm' in template_info:
+                    target_width_mm, target_height_mm = template_info['size_mm']
+                else:
+                    # Default logo size: 30mm x 30mm (reasonable for typical logo)
+                    target_width_mm = 30.0
+                    target_height_mm = 30.0
+
+                # Convert mm to pixels using calibration
+                new_width = int(target_width_mm / self.mm_per_pixel)
+                new_height = int(target_height_mm / self.mm_per_pixel)
+
+                # Store both pixel and mm sizes
                 self.template_size = (new_width, new_height)
+                self.template_size_mm = (target_width_mm, target_height_mm)
+
             else:
-                self.template_size = (template_width, template_height)
+                # Fallback to reasonable pixel size if no calibration
+                img_height, img_width = display_image.shape[:2]
+                max_size = min(100, img_width // 8, img_height // 8)
+
+                if max(template_width, template_height) > max_size:
+                    scale = max_size / max(template_width, template_height)
+                    new_width = int(template_width * scale)
+                    new_height = int(template_height * scale)
+                    self.template_size = (new_width, new_height)
+                else:
+                    self.template_size = (template_width, template_height)
+
+                # Estimate mm size
+                self.template_size_mm = (self.template_size[0] * self.mm_per_pixel,
+                                       self.template_size[1] * self.mm_per_pixel)
+
+            # Resize template to calculated size
+            template_rgb = cv2.resize(template_rgb, self.template_size)
 
             # Position template (centered on template_position)
             pos_x = self.template_position[0] - self.template_size[0] // 2
@@ -1933,11 +1984,16 @@ class ConfigDesigner:
 
         # Clear canvas and display image
         self.image_canvas.delete("all")
+
+        # Place the image centered
         self.image_canvas.create_image(
             new_width // 2, new_height // 2,
             image=self.photo_image,
             tags="background"
         )
+
+        # Draw rulers and grid on top
+        self._draw_rulers_and_grid(new_width, new_height)
 
         # Update canvas scroll region
         self.image_canvas.configure(scrollregion=self.image_canvas.bbox("all"))
@@ -2518,6 +2574,217 @@ class ConfigDesigner:
             self.design_combo['values'] = sorted(designs)
 
         self.root.mainloop()
+
+    def _draw_rulers_and_grid(self, canvas_width, canvas_height):
+        """Draw rulers and grid overlay on canvas"""
+        if not (self.rulers_var.get() or self.grid_var.get()):
+            return
+
+        # Use minimum calibration if not set
+        if self.mm_per_pixel <= 0:
+            self.mm_per_pixel = 1.0
+
+        # Calculate spacing with minimum limits
+        ruler_spacing_px = max(20, self.ruler_spacing_mm / self.mm_per_pixel * self.canvas_scale)
+        grid_spacing_px = max(15, self.grid_spacing_mm / self.mm_per_pixel * self.canvas_scale)
+
+        # Draw grid first (background)
+        if self.grid_var.get():
+            self._draw_grid_simple(canvas_width, canvas_height, grid_spacing_px)
+
+        # Draw rulers on top
+        if self.rulers_var.get():
+            self._draw_rulers_simple(canvas_width, canvas_height, ruler_spacing_px)
+
+    def _draw_grid(self, canvas_width, canvas_height, spacing_px, ruler_width=0, ruler_height=0):
+        """Draw grid lines on canvas"""
+        # Only draw grid if spacing is reasonable (avoid too dense grids)
+        if spacing_px < 5:
+            return
+
+        # Vertical grid lines - offset by ruler width
+        x = ruler_width + spacing_px
+        while x < canvas_width:
+            self.image_canvas.create_line(
+                x, ruler_height, x, canvas_height,
+                fill="#CCCCCC", width=1, tags="grid"
+            )
+            x += spacing_px
+
+        # Horizontal grid lines - offset by ruler height
+        y = ruler_height + spacing_px
+        while y < canvas_height:
+            self.image_canvas.create_line(
+                ruler_width, y, canvas_width, y,
+                fill="#CCCCCC", width=1, tags="grid"
+            )
+            y += spacing_px
+
+    def _draw_rulers(self, canvas_width, canvas_height, spacing_px):
+        """Draw rulers with measurements on canvas (legacy function - not used)"""
+        pass
+
+    def _draw_grid_simple(self, canvas_width, canvas_height, spacing_px):
+        """Simple grid drawing"""
+        x = spacing_px
+        while x < canvas_width:
+            self.image_canvas.create_line(
+                x, 0, x, canvas_height,
+                fill="#DDDDDD", width=1, tags="grid"
+            )
+            x += spacing_px
+
+        y = spacing_px
+        while y < canvas_height:
+            self.image_canvas.create_line(
+                0, y, canvas_width, y,
+                fill="#DDDDDD", width=1, tags="grid"
+            )
+            y += spacing_px
+
+    def _draw_rulers_simple(self, canvas_width, canvas_height, spacing_px):
+        """Simple rulers drawing"""
+        # Top ruler
+        self.image_canvas.create_rectangle(
+            0, 0, canvas_width, 25,
+            fill="#F5F5F5", outline="#999999", width=1, tags="ruler"
+        )
+
+        # Left ruler
+        self.image_canvas.create_rectangle(
+            0, 0, 35, canvas_height,
+            fill="#F5F5F5", outline="#999999", width=1, tags="ruler"
+        )
+
+        # Ruler marks - horizontal
+        x = 35
+        mm = 0
+        while x < canvas_width:
+            self.image_canvas.create_line(
+                x, 0, x, 25,
+                fill="#666666", width=1, tags="ruler"
+            )
+            if mm % 20 == 0:  # Label every 20mm
+                self.image_canvas.create_text(
+                    x, 12, text=str(mm),
+                    font=("Arial", 8), fill="#666666", tags="ruler"
+                )
+            x += spacing_px
+            mm += self.ruler_spacing_mm
+
+        # Ruler marks - vertical
+        y = 25
+        mm = 0
+        while y < canvas_height:
+            self.image_canvas.create_line(
+                0, y, 35, y,
+                fill="#666666", width=1, tags="ruler"
+            )
+            if mm % 20 == 0:  # Label every 20mm
+                self.image_canvas.create_text(
+                    17, y, text=str(mm),
+                    font=("Arial", 8), fill="#666666", tags="ruler", angle=90
+                )
+            y += spacing_px
+            mm += self.ruler_spacing_mm
+
+    def _toggle_rulers(self):
+        """Toggle ruler display"""
+        self.show_rulers = self.rulers_var.get()
+        if self.current_image is not None:
+            self._display_image()
+
+    def _toggle_grid(self):
+        """Toggle grid display"""
+        self.show_grid = self.grid_var.get()
+        if self.current_image is not None:
+            self._display_image()
+
+    def _on_canvas_motion(self, event):
+        """Handle mouse motion over canvas for tooltip"""
+        if self.current_image is None:
+            return
+
+        # Convert canvas coordinates to image coordinates
+        canvas_x = self.image_canvas.canvasx(event.x)
+        canvas_y = self.image_canvas.canvasy(event.y)
+
+        # Convert to real-world coordinates (mm)
+        if self.mm_per_pixel > 0 and self.canvas_scale > 0:
+            img_x = canvas_x / self.canvas_scale
+            img_y = canvas_y / self.canvas_scale
+            real_x_mm = img_x * self.mm_per_pixel
+            real_y_mm = img_y * self.mm_per_pixel
+
+            # Show coordinates tooltip
+            self._show_coordinates_tooltip(event.x, event.y, real_x_mm, real_y_mm)
+
+            # Check if hovering over a logo and show its dimensions
+            self._check_logo_hover(real_x_mm, real_y_mm, event.x, event.y)
+        else:
+            self._hide_tooltip()
+
+    def _show_coordinates_tooltip(self, x, y, real_x_mm, real_y_mm):
+        """Show coordinates tooltip"""
+        if self.tooltip_label:
+            self.tooltip_label.destroy()
+
+        tooltip_text = f"📍 {real_x_mm:.1f}mm, {real_y_mm:.1f}mm"
+
+        self.tooltip_label = tk.Label(
+            self.root,
+            text=tooltip_text,
+            background="lightyellow",
+            relief="solid",
+            borderwidth=1,
+            font=("Arial", 9)
+        )
+
+        # Position tooltip near mouse cursor
+        self.tooltip_label.place(x=x + 10, y=y + 10)
+
+    def _check_logo_hover(self, real_x_mm, real_y_mm, cursor_x, cursor_y):
+        """Check if hovering over a logo and show its dimensions"""
+        if not self.current_style:
+            return
+
+        for logo in self.current_style.logos:
+            # Check if cursor is within logo area
+            logo_left = logo.position_mm.x - logo.roi.width * self.mm_per_pixel / 2
+            logo_right = logo.position_mm.x + logo.roi.width * self.mm_per_pixel / 2
+            logo_top = logo.position_mm.y - logo.roi.height * self.mm_per_pixel / 2
+            logo_bottom = logo.position_mm.y + logo.roi.height * self.mm_per_pixel / 2
+
+            if (logo_left <= real_x_mm <= logo_right and
+                logo_top <= real_y_mm <= logo_bottom):
+
+                # Show enhanced tooltip with logo info
+                if self.tooltip_label:
+                    self.tooltip_label.destroy()
+
+                tooltip_text = (f"🏷️ {logo.name}\n"
+                              f"📍 Pos: {logo.position_mm.x:.1f}, {logo.position_mm.y:.1f} mm\n"
+                              f"📏 ROI: {logo.roi.width:.1f} × {logo.roi.height:.1f} mm\n"
+                              f"🎯 Tolerancia: {logo.tolerance_mm:.1f} mm")
+
+                self.tooltip_label = tk.Label(
+                    self.root,
+                    text=tooltip_text,
+                    background="lightblue",
+                    relief="solid",
+                    borderwidth=1,
+                    font=("Arial", 9),
+                    justify=tk.LEFT
+                )
+
+                self.tooltip_label.place(x=cursor_x + 15, y=cursor_y + 15)
+                break
+
+    def _hide_tooltip(self):
+        """Hide tooltip"""
+        if self.tooltip_label:
+            self.tooltip_label.destroy()
+            self.tooltip_label = None
 
 
 def main():
