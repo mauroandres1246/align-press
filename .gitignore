@@ -1,2 +1,70 @@
+# Python Environment
 .venv/
+venv/
+.env
 .pytest_cache/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Testing Files
+test_*.py
+*_test.py
+debug_*.py
+*_debug.py
+test_*
+*test*
+
+# Development and Debug Files
+*.log
+temp_*
+*_temp*
+debug_*
+validation_*
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.spyderproject
+.spyproject
+
+# System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Configuration Files (if sensitive)
+config/temp_*.json
+config/test_*.json
+config/debug_*.json
+
+# Output and Generated Files
+*.png.backup
+*.jpg.backup
+output/
+exports/
+reports/
+
+# Documentation Build
+docs/_build/
+site/
+
+# Coverage Reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Jupyter Notebooks Checkpoints
+.ipynb_checkpoints
