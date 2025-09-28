@@ -6,48 +6,16 @@
   "logos": [
     {
       "id": "logo_1",
-      "name": "Logo comunicaciones.png",
+      "name": "Logo transfer 2.png",
       "position_mm": {
-        "x": 408.343249976635,
-        "y": 126.59346005320549
+        "x": 294.7970267534256,
+        "y": 302.9074712693691
       },
       "roi": {
-        "x": 390.7118488550186,
-        "y": 113.3684600532055,
-        "width": 35.26280224323273,
-        "height": 26.45
-      },
-      "tolerance_mm": 5.0,
-      "detector": "template_matching"
-    },
-    {
-      "id": "logo_2",
-      "name": "Logo gulf.png",
-      "position_mm": {
-        "x": 208.0505332350731,
-        "y": 220.74514204263687
-      },
-      "roi": {
-        "x": 190.41913211345673,
-        "y": 203.11514204263688,
-        "width": 35.26280224323273,
-        "height": 35.26
-      },
-      "tolerance_mm": 5.0,
-      "detector": "template_matching"
-    },
-    {
-      "id": "logo_3",
-      "name": "Logo gana.png",
-      "position_mm": {
-        "x": 292.68125861883163,
-        "y": 312.43
-      },
-      "roi": {
-        "x": 275.04985749721527,
-        "y": 294.8,
-        "width": 35.26280224323273,
-        "height": 35.26
+        "x": 142.27002675342558,
+        "y": 125.23447126936912,
+        "width": 305.05400000000003,
+        "height": 355.346
       },
       "tolerance_mm": 5.0,
       "detector": "template_matching"

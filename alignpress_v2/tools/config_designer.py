@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import json
 import os
+import platform
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from dataclasses import asdict
@@ -202,9 +203,8 @@ class ConfigDesigner:
         self._setup_menu()
 
     def _setup_menu(self):
-        """Setup menu bar"""
+        """Setup menu bar with macOS compatibility"""
         menubar = tk.Menu(self.root)
-        self.root.config(menu=menubar)
 
         # File menu
         file_menu = tk.Menu(menubar, tearoff=0)
@@ -226,6 +226,27 @@ class ConfigDesigner:
         tools_menu.add_command(label="Vista Previa de ROIs", command=self._preview_rois)
         tools_menu.add_command(label="Exportar Debug Image", command=self._export_debug_image)
 
+        # Configure menu - must be done after creating all menus
+        self.root.config(menu=menubar)
+
+        # macOS specific fixes
+        if platform.system() == "Darwin":  # macOS
+            # Force the menu to update and display
+            self.root.update_idletasks()
+
+            # Try alternative configuration method for macOS
+            try:
+                # Some macOS versions need this explicit call
+                self.root.tk.call('tk_menuBar', self.root._w, menubar._w)
+            except tk.TclError:
+                # If the above fails, the standard config should work
+                pass
+
+            # Ensure the window is brought to front
+            self.root.lift()
+            self.root.attributes('-topmost', True)
+            self.root.after_idle(lambda: self.root.attributes('-topmost', False))
+
     def _setup_image_panel(self, parent):
         """Setup image display panel"""
         # Toolbar
@@ -242,13 +263,26 @@ class ConfigDesigner:
         # Visual enhancements controls
         ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=5, fill=tk.Y)
 
-        self.rulers_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(toolbar, text="Reglas", variable=self.rulers_var,
-                       command=self._toggle_rulers).pack(side=tk.LEFT, padx=(0, 5))
+        # macOS compatibility for BooleanVar
+        try:
+            self.rulers_var = tk.BooleanVar(value=True)
+            ttk.Checkbutton(toolbar, text="Reglas", variable=self.rulers_var,
+                           command=self._toggle_rulers).pack(side=tk.LEFT, padx=(0, 5))
 
-        self.grid_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(toolbar, text="Grid", variable=self.grid_var,
-                       command=self._toggle_grid).pack(side=tk.LEFT, padx=(0, 5))
+            self.grid_var = tk.BooleanVar(value=True)
+            ttk.Checkbutton(toolbar, text="Grid", variable=self.grid_var,
+                           command=self._toggle_grid).pack(side=tk.LEFT, padx=(0, 5))
+        except tk.TclError:
+            # Fallback for macOS compatibility issues
+            self.rulers_var = tk.BooleanVar()
+            self.rulers_var.set(True)
+            ttk.Checkbutton(toolbar, text="Reglas", variable=self.rulers_var,
+                           command=self._toggle_rulers).pack(side=tk.LEFT, padx=(0, 5))
+
+            self.grid_var = tk.BooleanVar()
+            self.grid_var.set(True)
+            ttk.Checkbutton(toolbar, text="Grid", variable=self.grid_var,
+                           command=self._toggle_grid).pack(side=tk.LEFT, padx=(0, 5))
 
         # Calibration status
         self.calibration_label = ttk.Label(toolbar, text="Sin calibración", foreground="red")
@@ -512,14 +546,22 @@ class ConfigDesigner:
         self.pos_x_var = tk.DoubleVar()
         self.pos_x_entry = ttk.Entry(pos_grid, textvariable=self.pos_x_var, width=8)
         self.pos_x_entry.grid(row=0, column=1, padx=(0, 10))
-        self.pos_x_var.trace('w', self._on_position_changed)
+        try:
+            self.pos_x_var.trace('w', self._on_position_changed)
+        except tk.TclError:
+            # macOS compatibility: use add instead of 'w'
+            self.pos_x_var.trace_add('write', self._on_position_changed)
 
         # Y position
         ttk.Label(pos_grid, text="Y (mm):").grid(row=0, column=2, sticky=tk.W, padx=(0, 5))
         self.pos_y_var = tk.DoubleVar()
         self.pos_y_entry = ttk.Entry(pos_grid, textvariable=self.pos_y_var, width=8)
         self.pos_y_entry.grid(row=0, column=3)
-        self.pos_y_var.trace('w', self._on_position_changed)
+        try:
+            self.pos_y_var.trace('w', self._on_position_changed)
+        except tk.TclError:
+            # macOS compatibility: use add instead of 'w'
+            self.pos_y_var.trace_add('write', self._on_position_changed)
 
     def _create_size_fields(self, parent):
         """Create width/height size input fields"""
@@ -531,14 +573,22 @@ class ConfigDesigner:
         self.width_var = tk.DoubleVar()
         self.width_entry = ttk.Entry(size_grid, textvariable=self.width_var, width=8)
         self.width_entry.grid(row=0, column=1, padx=(0, 10))
-        self.width_var.trace('w', self._on_size_changed)
+        try:
+            self.width_var.trace('w', self._on_size_changed)
+        except tk.TclError:
+            # macOS compatibility: use add instead of 'w'
+            self.width_var.trace_add('write', self._on_size_changed)
 
         # Height
         ttk.Label(size_grid, text="Alto (mm):").grid(row=0, column=2, sticky=tk.W, padx=(0, 5))
         self.height_var = tk.DoubleVar()
         self.height_entry = ttk.Entry(size_grid, textvariable=self.height_var, width=8)
         self.height_entry.grid(row=0, column=3)
-        self.height_var.trace('w', self._on_size_changed)
+        try:
+            self.height_var.trace('w', self._on_size_changed)
+        except tk.TclError:
+            # macOS compatibility: use add instead of 'w'
+            self.height_var.trace_add('write', self._on_size_changed)
 
     def _create_template_action_buttons(self, parent):
         """Create template action buttons"""
