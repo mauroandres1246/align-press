@@ -260,6 +260,11 @@ class ConfigDesigner:
         ttk.Button(toolbar, text="Ajustar Zoom",
                   command=self._fit_image).pack(side=tk.LEFT, padx=(0, 5))
 
+        # Quick testing button
+        ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=5, fill=tk.Y)
+        ttk.Button(toolbar, text="🔍 Testing Rápido",
+                  command=self._quick_test_detection).pack(side=tk.LEFT, padx=(0, 5))
+
         # Visual enhancements controls
         ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=5, fill=tk.Y)
 
@@ -1711,69 +1716,148 @@ class ConfigDesigner:
             logger.error(f"Error testing detection: {e}")
 
     def _show_detection_results(self, result: Dict, image_path: Path):
-        """Show detection results in popup window"""
+        """Show enhanced detection results with actionable feedback"""
         results_window = tk.Toplevel(self.root)
-        results_window.title("Resultados de Detección")
-        results_window.geometry("600x500")
+        results_window.title("🔍 Resultados de Detección - Debug Mejorado")
+        results_window.geometry("800x700")
 
         main_frame = ttk.Frame(results_window)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Results summary
-        summary_frame = ttk.LabelFrame(main_frame, text="Resumen")
+        # Enhanced results summary
+        summary_frame = ttk.LabelFrame(main_frame, text="📊 Resumen General")
         summary_frame.pack(fill=tk.X, pady=(0, 10))
 
         success_status = "✅ ÉXITO" if result.get('overall_success') else "❌ FALLO"
-        ttk.Label(summary_frame, text=f"Estado: {success_status}",
-                 font=("Arial", 10, "bold")).pack(anchor=tk.W, padx=5, pady=2)
+        status_color = "green" if result.get('overall_success') else "red"
+
+        status_label = ttk.Label(summary_frame, text=f"Estado: {success_status}",
+                                font=("Arial", 12, "bold"))
+        status_label.pack(anchor=tk.W, padx=5, pady=2)
+
+        # Add overall diagnosis
+        successful = result.get('successful_logos', 0)
+        total = result.get('logo_count', 0)
+        if successful == 0:
+            diagnosis = "❌ Ningún logo detectado - Verificar calibración y posiciones"
+        elif successful == total:
+            diagnosis = "🎉 Todos los logos detectados correctamente"
+        else:
+            diagnosis = f"⚠️ {total - successful} logo(s) requieren ajustes"
+
+        ttk.Label(summary_frame, text=diagnosis, font=("Arial", 10, "italic")).pack(anchor=tk.W, padx=5, pady=2)
 
         ttk.Label(summary_frame,
-                 text=f"Logos detectados: {result.get('successful_logos', 0)}/{result.get('logo_count', 0)}").pack(anchor=tk.W, padx=5, pady=2)
+                 text=f"Logos detectados: {successful}/{total}").pack(anchor=tk.W, padx=5, pady=2)
 
         ttk.Label(summary_frame,
-                 text=f"Tiempo de procesamiento: {result.get('processing_time_ms', 0):.1f}ms").pack(anchor=tk.W, padx=5, pady=2)
+                 text=f"Tiempo: {result.get('processing_time_ms', 0):.1f}ms | "
+                      f"Confianza promedio: {result.get('average_confidence', 0):.3f}").pack(anchor=tk.W, padx=5, pady=2)
 
-        ttk.Label(summary_frame,
-                 text=f"Confianza promedio: {result.get('average_confidence', 0):.3f}").pack(anchor=tk.W, padx=5, pady=2)
-
-        # Individual logo results
+        # Enhanced individual logo results with actionable feedback
         if 'logo_results' in result:
-            logo_frame = ttk.LabelFrame(main_frame, text="Resultados por Logo")
+            logo_frame = ttk.LabelFrame(main_frame, text="🎯 Análisis Detallado por Logo")
             logo_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
 
-            # Create scrollable text widget
-            text_widget = tk.Text(logo_frame, height=12, wrap=tk.WORD)
+            # Create scrollable text widget with better formatting
+            text_widget = tk.Text(logo_frame, height=15, wrap=tk.WORD, font=("Consolas", 9))
             scrollbar = ttk.Scrollbar(logo_frame, orient=tk.VERTICAL, command=text_widget.yview)
             text_widget.configure(yscrollcommand=scrollbar.set)
 
             text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(5, 0), pady=5)
             scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=5)
 
-            # Add logo results
-            for logo_result in result.get('logo_results', []):
+            # Add enhanced logo results with suggestions
+            for i, logo_result in enumerate(result.get('logo_results', [])):
                 logo_id = logo_result.get('logo_id', 'unknown')
                 detected = logo_result.get('detected', False)
                 confidence = logo_result.get('confidence', 0.0)
-                position = logo_result.get('position_mm', {})
+                position_found = logo_result.get('position_mm', {})
+                position_error = logo_result.get('position_error_mm', 999.0)
 
-                status = "✅" if detected else "❌"
-                text_widget.insert(tk.END, f"{status} {logo_id}:\n")
-                text_widget.insert(tk.END, f"   Detectado: {'Sí' if detected else 'No'}\n")
-                text_widget.insert(tk.END, f"   Confianza: {confidence:.3f}\n")
+                # Find expected position from current style
+                expected_pos = {"x": 0, "y": 0}
+                current_tolerance = 3.0  # default
+                if self.current_style and i < len(self.current_style.logos):
+                    expected_pos = {
+                        "x": self.current_style.logos[i].position_mm.x,
+                        "y": self.current_style.logos[i].position_mm.y
+                    }
+                    current_tolerance = self.current_style.logos[i].tolerance_mm
 
-                if position:
-                    text_widget.insert(tk.END, f"   Posición: ({position.get('x', 0):.1f}, {position.get('y', 0):.1f}) mm\n")
+                # Header
+                status_icon = "✅" if detected else "❌"
+                text_widget.insert(tk.END, f"{status_icon} Logo '{logo_id}':\n", "header")
 
-                text_widget.insert(tk.END, "\n")
+                # Detection status
+                if detected:
+                    confidence_level = "EXCELENTE" if confidence > 0.8 else "BUENA" if confidence > 0.6 else "BAJA"
+                    text_widget.insert(tk.END, f"   ✅ Detectado: SÍ (Confianza: {confidence:.3f} - {confidence_level})\n")
+
+                    # Position analysis
+                    found_x = position_found.get('x', 0)
+                    found_y = position_found.get('y', 0)
+                    expected_x = expected_pos['x']
+                    expected_y = expected_pos['y']
+
+                    error_x = found_x - expected_x
+                    error_y = found_y - expected_y
+
+                    text_widget.insert(tk.END, f"   📍 Esperado: ({expected_x:.1f}, {expected_y:.1f}) mm\n")
+                    text_widget.insert(tk.END, f"   📍 Encontrado: ({found_x:.1f}, {found_y:.1f}) mm\n")
+
+                    if position_error <= current_tolerance:
+                        text_widget.insert(tk.END, f"   🎯 Error: {position_error:.1f}mm (✅ Dentro de tolerancia: {current_tolerance}mm)\n")
+                    else:
+                        text_widget.insert(tk.END, f"   ⚠️ Error: {position_error:.1f}mm (❌ Fuera de tolerancia: {current_tolerance}mm)\n")
+
+                        # Direction suggestions
+                        direction_text = ""
+                        if abs(error_x) > 1:
+                            direction_text += f"{abs(error_x):.1f}mm {'→ derecha' if error_x > 0 else '← izquierda'}"
+                        if abs(error_y) > 1:
+                            if direction_text:
+                                direction_text += ", "
+                            direction_text += f"{abs(error_y):.1f}mm {'↓ abajo' if error_y > 0 else '↑ arriba'}"
+
+                        if direction_text:
+                            text_widget.insert(tk.END, f"   🧭 Dirección del error: {direction_text}\n")
+
+                        # Actionable suggestions
+                        text_widget.insert(tk.END, f"   💡 SUGERENCIAS:\n")
+                        text_widget.insert(tk.END, f"      • Mover posición esperada {direction_text}\n")
+                        if position_error > current_tolerance * 2:
+                            suggested_tolerance = max(position_error + 1, current_tolerance * 1.5)
+                            text_widget.insert(tk.END, f"      • O aumentar tolerancia a {suggested_tolerance:.1f}mm\n")
+                else:
+                    text_widget.insert(tk.END, f"   ❌ Detectado: NO (Confianza: {confidence:.3f})\n")
+                    text_widget.insert(tk.END, f"   📍 Buscando en: ({expected_pos['x']:.1f}, {expected_pos['y']:.1f}) mm ± {current_tolerance}mm\n")
+
+                    # Diagnosis for failed detection
+                    text_widget.insert(tk.END, f"   🔍 POSIBLES CAUSAS:\n")
+                    if confidence < 0.3:
+                        text_widget.insert(tk.END, f"      • El logo no es visible en esta área de la imagen\n")
+                        text_widget.insert(tk.END, f"      • Verificar que la posición esperada sea correcta\n")
+                    elif confidence < 0.6:
+                        text_widget.insert(tk.END, f"      • Logo parcialmente visible o con baja calidad\n")
+                        text_widget.insert(tk.END, f"      • Aumentar tolerancia a {current_tolerance * 2:.1f}mm\n")
+
+                    text_widget.insert(tk.END, f"   💡 SUGERENCIAS:\n")
+                    text_widget.insert(tk.END, f"      • Verificar que el logo esté visible en la imagen\n")
+                    text_widget.insert(tk.END, f"      • Ajustar posición esperada manualmente\n")
+                    text_widget.insert(tk.END, f"      • Aumentar tolerancia de {current_tolerance}mm a {current_tolerance * 2:.1f}mm\n")
+                    text_widget.insert(tk.END, f"      • Probar con diferentes tipos de detector\n")
+
+                text_widget.insert(tk.END, "\n" + "="*50 + "\n\n")
 
             text_widget.config(state=tk.DISABLED)
 
-        # Buttons
+        # Enhanced action buttons
         button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill=tk.X)
+        button_frame.pack(fill=tk.X, pady=(10, 0))
 
         def show_debug_image():
-            """Show debug image if available"""
+            """Show debug image with detection overlays"""
             try:
                 from ..tools.detection_simulator import DetectionSimulator
                 simulator = DetectionSimulator()
@@ -1783,7 +1867,7 @@ class ConfigDesigner:
                     # Open debug image in new window
                     debug_image = cv2.imread(str(debug_path))
                     if debug_image is not None:
-                        self._show_image_popup(debug_image, "Imagen de Debug")
+                        self._show_image_popup(debug_image, "🖼️ Imagen de Debug - Detecciones Visualizadas")
                     else:
                         messagebox.showerror("Error", "No se pudo cargar imagen de debug")
                 else:
@@ -1792,10 +1876,130 @@ class ConfigDesigner:
             except Exception as e:
                 messagebox.showerror("Error", f"Error mostrando debug: {e}")
 
-        ttk.Button(button_frame, text="Ver Debug Image",
-                  command=show_debug_image).pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Button(button_frame, text="Cerrar",
+        def quick_retest():
+            """Quick retest with current configuration"""
+            results_window.destroy()
+            self._test_detection()
+
+        def apply_suggestions():
+            """Apply automatic suggestions to improve detection"""
+            try:
+                improved_count = 0
+                if 'logo_results' in result and self.current_style:
+                    for i, logo_result in enumerate(result.get('logo_results', [])):
+                        if i < len(self.current_style.logos):
+                            logo = self.current_style.logos[i]
+
+                            # Auto-adjust tolerance for failed detections
+                            if not logo_result.get('detected', False):
+                                old_tolerance = logo.tolerance_mm
+                                logo.tolerance_mm = min(old_tolerance * 2, 15.0)  # Max 15mm
+                                improved_count += 1
+
+                            # Auto-adjust position for detected but misplaced logos
+                            elif logo_result.get('position_error_mm', 0) > logo.tolerance_mm:
+                                position_found = logo_result.get('position_mm', {})
+                                if position_found:
+                                    # Move expected position closer to found position
+                                    logo.position_mm.x = position_found.get('x', logo.position_mm.x)
+                                    logo.position_mm.y = position_found.get('y', logo.position_mm.y)
+                                    improved_count += 1
+
+                if improved_count > 0:
+                    messagebox.showinfo("✅ Ajustes Aplicados",
+                                      f"Se aplicaron {improved_count} ajuste(s) automático(s).\n\n"
+                                      f"Cierra esta ventana y prueba detección nuevamente.")
+                    self._update_logo_list()  # Refresh UI
+                else:
+                    messagebox.showinfo("ℹ️ Sin Cambios",
+                                      "No se encontraron ajustes automáticos para aplicar.")
+
+            except Exception as e:
+                messagebox.showerror("Error", f"Error aplicando sugerencias: {e}")
+
+        # Action buttons
+        ttk.Button(button_frame, text="🖼️ Ver Debug Image",
+                  command=show_debug_image).pack(side=tk.LEFT, padx=(0, 5))
+
+        ttk.Button(button_frame, text="🔄 Probar Otra Vez",
+                  command=quick_retest).pack(side=tk.LEFT, padx=(0, 5))
+
+        if not result.get('overall_success', False):
+            ttk.Button(button_frame, text="🔧 Aplicar Sugerencias",
+                      command=apply_suggestions).pack(side=tk.LEFT, padx=(0, 5))
+
+        ttk.Button(button_frame, text="❌ Cerrar",
                   command=results_window.destroy).pack(side=tk.RIGHT)
+
+    def _quick_test_detection(self):
+        """Quick test detection with option to load different test image"""
+        if not self.current_style:
+            messagebox.showwarning("Advertencia", "Crear configuración de logos primero")
+            return
+
+        # Quick dialog to choose testing mode
+        dialog = tk.Toplevel(self.root)
+        dialog.title("🔍 Testing Rápido")
+        dialog.geometry("400x200")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        main_frame = ttk.Frame(dialog)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        ttk.Label(main_frame, text="¿Cómo quieres probar la detección?",
+                 font=("Arial", 11, "bold")).pack(pady=(0, 15))
+
+        def test_current_image():
+            """Test with currently loaded image"""
+            dialog.destroy()
+            if self.current_image is not None:
+                self._test_detection()
+            else:
+                messagebox.showwarning("Advertencia", "Cargar imagen primero")
+
+        def test_new_image():
+            """Test with a new image"""
+            dialog.destroy()
+            test_image_path = filedialog.askopenfilename(
+                title="Seleccionar imagen de prueba",
+                filetypes=[
+                    ("Imágenes", "*.jpg *.jpeg *.png *.bmp"),
+                    ("JPEG", "*.jpg *.jpeg"),
+                    ("PNG", "*.png"),
+                    ("Todos", "*.*")
+                ],
+                initialdir="test_images" if Path("test_images").exists() else "."
+            )
+
+            if test_image_path:
+                try:
+                    # Load test image temporarily
+                    test_image = cv2.imread(test_image_path)
+                    if test_image is not None:
+                        # Store current image temporarily
+                        original_image = self.current_image
+                        self.current_image = test_image
+
+                        # Run test
+                        self._test_detection()
+
+                        # Restore original image
+                        self.current_image = original_image
+                    else:
+                        messagebox.showerror("Error", "No se pudo cargar la imagen de prueba")
+                except Exception as e:
+                    messagebox.showerror("Error", f"Error cargando imagen de prueba: {e}")
+
+        # Buttons
+        ttk.Button(main_frame, text="📷 Usar imagen actual",
+                  command=test_current_image).pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Button(main_frame, text="📁 Cargar imagen de prueba",
+                  command=test_new_image).pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Button(main_frame, text="❌ Cancelar",
+                  command=dialog.destroy).pack(side=tk.RIGHT, pady=(15, 0))
 
     def _show_image_popup(self, image: np.ndarray, title: str):
         """Show an image in a popup window"""
